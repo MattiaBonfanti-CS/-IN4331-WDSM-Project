@@ -7,8 +7,11 @@ from flask import Flask, Response
 import redis
 
 
+RANDOM_SEED = 444
+ID_BYTES_SIZE = 32
+
 # Set random seed to generate unique ids for the items
-random.seed(444)
+random.seed(RANDOM_SEED)
 
 # Initialize Flask app
 app = Flask("stock-service")
@@ -36,8 +39,8 @@ class Item:
     """
     Item class to define items in stock.
     """
-    def __init__(self, price: int):
-        self.item_id = f"item:{random.getrandbits(32)}"
+    def __init__(self, item_id: str, price: int):
+        self.item_id = item_id
         self.price = price
         self.stock = 0
 
@@ -66,7 +69,13 @@ def create_item(price: int):
     if price < 0:
         return Response("The price must be >= 0!", status=400)
 
-    new_item = Item(price=price)
+    # Create unique item id
+    new_item_id = f"item:{random.getrandbits(ID_BYTES_SIZE)}"
+    while db.hget(new_item_id, "item_id"):
+        new_item_id = f"item:{random.getrandbits(ID_BYTES_SIZE)}"
+
+    # Create new item
+    new_item = Item(item_id=new_item_id, price=price)
 
     # Store to DB
     try:
