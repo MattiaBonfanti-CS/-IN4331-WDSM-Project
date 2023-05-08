@@ -7,6 +7,13 @@ services:
       - ./gateway_nginx.conf:/etc/nginx/nginx.conf:ro
     ports:
       - "8000:80"
+    depends_on:
+      - order-service
+      - order-db
+      - stock-service
+      - stock-db
+      - payment-service
+      - payment-db
 
   order-service:
     build: ./order
@@ -20,6 +27,8 @@ services:
   order-db:
     image: redis:latest
     command: redis-server --requirepass redis --maxmemory 512mb
+    ports:
+      - 8001:6379
 
   stock-service:
     build: ./stock
@@ -31,6 +40,8 @@ services:
   stock-db:
     image: redis:latest
     command: redis-server --requirepass redis --maxmemory 512mb
+    ports:
+      - 8002:6379
 
   payment-service:
     build: ./payment
@@ -42,3 +53,5 @@ services:
   payment-db:
     image: redis:latest
     command: redis-server --requirepass redis --maxmemory 512mb
+    ports:
+      - 8003:6379

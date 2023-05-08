@@ -6,8 +6,6 @@ import json
 from flask import Flask, Response
 import redis
 
-from payment.app import remove_credit
-
 gateway_url = os.environ['GATEWAY_URL']
 
 app = Flask("order-service")
@@ -84,7 +82,6 @@ def remove_order(order_id):
     :param order_id: The id of the order to be deleted.
     :return: Empty successful response if successful, otherwise error.
     """
-
     try:
         db.delete(order_id)  # deletes the whole order and
                             # will return 0 if the entry does not exist
@@ -103,7 +100,6 @@ def add_item(order_id, item_id):
     :param item_id:
     :return: A success response if the operation is successful, an error otherwise.
     """
-
     if not db.hget(order_id, "order_id"):
         return Response(f"The order {order_id} does not exist in the DB!", status=404)
 
@@ -121,7 +117,34 @@ def add_item(order_id, item_id):
 
 @app.delete('/removeItem/<order_id>/<item_id>')
 def remove_item(order_id, item_id):
-    pass
+    """
+    Removes a given item from the given order.
+
+    :param order_id: The id of the order.
+    :param item_id: The item to be removed.
+    :return: A success response if the operation is successful, an error otherwise.
+    """
+    # Check if the order exists
+    if not db.hget(order_id, "order_id"):
+        return Response(f"The order {order_id} does not exist in the DB!", status=404)
+
+    # Check if the item exists
+    items = db.hget(order_id, "items")
+    if not items.get(item_id):
+        return Response(f"The item {item_id} does not exist in order {order_id}", status=404)
+
+    # Decrease the number of items by 1 or delete the item
+    if items[item_id] > 1:
+        items[item_id] -= 1
+    else:
+        del items[item_id]
+
+    try:
+        db.hset(order_id, "items", items)
+    except Exception as err:
+        return Response(str(err), status=400)
+
+    return Response(f"The item {item_id} is removed from order {order_id}", status=200)
 
 
 @app.get('/find/<order_id>')
