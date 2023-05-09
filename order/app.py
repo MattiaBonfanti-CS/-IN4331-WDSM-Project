@@ -2,11 +2,13 @@ import os
 import atexit
 import random
 import json
-
+import requests
 from flask import Flask, Response
 import redis
 
 gateway_url = os.environ['GATEWAY_URL']
+
+STOCK_SERVICE_URL = f"{gateway_url}/stock"
 
 RANDOM_SEED = 42
 ID_BYTES_SIZE = 32
@@ -27,6 +29,21 @@ def close_db_connection():
 
 
 atexit.register(close_db_connection)
+
+
+def convert_order(order):
+    """
+    Convert the order from bytes to proper types.
+
+    :return: The order as a dictionary.
+    """
+    return {
+        "order_id": order[b"order_id"].decode("utf-8"),
+        "user_id": int(order[b"user_id"]),
+        "items": json.loads(order[b"items"].decode("utf-8")),
+        "paid": json.loads(order[b"paid"].decode("utf-8")),
+        "total_cost": int(order[b"total_cost"])
+    }
 
 
 class Order:
@@ -105,6 +122,22 @@ def remove_order(order_id):
     return Response(json.dumps(f"The order with id {order_id} is removed successfully."), mimetype="application/json", status=200)
 
 
+@app.get('/find/<order_id>')
+def find_order(order_id):
+    try:
+        order = db.hgetall(order_id)  # returns dictionary
+    except Exception as err:
+        return Response(str(err), status=400)
+
+    if not order:
+        return Response(f"There isn't any order with {order_id} in the DB!", status=404)
+
+    # Convert bytes to proper types
+    return_order = order.convert_order()
+
+    return Response(json.dumps(return_order), mimetype="application/json", status=200)
+
+
 @app.post('/addItem/<order_id>/<item_id>')
 def add_item(order_id, item_id):
     """
@@ -114,6 +147,7 @@ def add_item(order_id, item_id):
     :param item_id:
     :return: A success response if the operation is successful, an error otherwise.
     """
+    # Check if the order exists
     if not db.hget(order_id, "order_id"):
         return Response(f"The order {order_id} does not exist in the DB!", status=404)
 
@@ -121,6 +155,7 @@ def add_item(order_id, item_id):
     # Increase the field of item_id with 1 or add a new field
     items[item_id] = items.get(item_id, 0) + 1
 
+    # Store to DB
     try:
         db.hset(order_id, "items", items) # overwrites the previous entry
     except Exception as err:
@@ -138,12 +173,31 @@ def remove_item(order_id, item_id):
     :param item_id: The item to be removed.
     :return: A success response if the operation is successful, an error otherwise.
     """
+    # Get the order
+    order = db.hgetall(order_id)
+
     # Check if the order exists
-    if not db.hget(order_id, "order_id"):
+    if not order:
         return Response(f"The order {order_id} does not exist in the DB!", status=404)
 
-    # Check if the item exists
-    items = db.hget(order_id, "items")
+    # Convert bytes to proper types
+    order = convert_order(order)
+
+    # Check if the order is paid
+    if order.get("paid"):
+        return Response(f"The order {order_id} is already paid!", status=400)
+
+    # Check if the item exists in the stock
+    find_item_in_stock = f"{STOCK_SERVICE_URL}/find/{item_id}"
+    try:
+        response = requests.get(find_item_in_stock)
+        if response.status_code == 404:
+            return Response(f"The item {item_id} does not exist in the DB.", status=404)
+    except Exception as err:
+        return Response(str(err), status=400)
+
+    # Check if the item exists in the order
+    items = order["items"]
     if not items.get(item_id):
         return Response(f"The item {item_id} does not exist in order {order_id}", status=404)
 
@@ -153,34 +207,15 @@ def remove_item(order_id, item_id):
     else:
         del items[item_id]
 
+    # Update the order
     try:
-        db.hset(order_id, "items", items)
+        db.hset(order_id, "items", json.dumps(items))
     except Exception as err:
         return Response(str(err), status=400)
+
+    # TODO: Update the total cost of the order
 
     return Response(f"The item {item_id} is removed from order {order_id}", status=200)
-
-
-@app.get('/find/<order_id>')
-def find_order(order_id):
-    try:
-        order = db.hgetall(order_id)  # returns dictionary
-    except Exception as err:
-        return Response(str(err), status=400)
-
-    if not order:
-        return Response(f"There isn't any order with {order_id} in the DB!", status=404)
-
-    # Convert bytes to proper types
-    return_order = {
-        "order_id": order[b"order_id"].decode("utf-8"),
-        "user_id": int(order[b"user_id"]),
-        "items": json.loads(order[b"items"].decode("utf-8")),
-        "paid": json.loads(order[b"paid"].decode("utf-8")),
-        "total_cost": int(order[b"total_cost"]),
-    }
-
-    return Response(json.dumps(return_order), mimetype="application/json", status=200)
 
 
 @app.post('/checkout/<order_id>')
