@@ -8,7 +8,7 @@ import redis
 
 gateway_url = os.environ['GATEWAY_URL']
 
-RANDOM_SEED = 444
+RANDOM_SEED = 42
 ID_BYTES_SIZE = 32
 
 # Set random seed to generate unique ids for the items
@@ -53,13 +53,13 @@ class Order:
             "order_id": self.order_id,
             "user_id": self.user_id,
             "items": json.dumps(self.items),
-            "paid": int(self.paid),
+            "paid": json.dumps(self.paid),
             "total_cost": self.total_cost
         }
 
 
 @app.post('/create/<user_id>')
-def create_order(user_id):
+def create_order(user_id: int):
     """
     Create a new empty order in the DB.
 
@@ -102,7 +102,7 @@ def remove_order(order_id):
     except Exception as err:
         return Response(str(err), status=400)
 
-    return Response(json.dumps(""), mimetype="application/json", status=200)
+    return Response(json.dumps(f"The order with id {order_id} is removed successfully."), mimetype="application/json", status=200)
 
 
 @app.post('/addItem/<order_id>/<item_id>')
@@ -164,19 +164,23 @@ def remove_item(order_id, item_id):
 @app.get('/find/<order_id>')
 def find_order(order_id):
     try:
-        order = db.hgetall(order_id) # returns dictionary
+        order = db.hgetall(order_id)  # returns dictionary
     except Exception as err:
         return Response(str(err), status=400)
 
     if not order:
-        return Response(f"There isn't any order with {order_id} in the DB!", status=200)
-    return Response(json.dumps(order), mimetype="application/json", status=200)
+        return Response(f"There isn't any order with {order_id} in the DB!", status=404)
 
-# def retrieve_order(order_id):
-#     try:
-#         order = db.hgetall(order_id) # returns dictionary
-#     except Exception as err:
-#         return Response(str(err), status=400)
+    # Convert bytes to proper types
+    return_order = {
+        "order_id": order[b"order_id"].decode("utf-8"),
+        "user_id": int(order[b"user_id"]),
+        "items": json.loads(order[b"items"].decode("utf-8")),
+        "paid": json.loads(order[b"paid"].decode("utf-8")),
+        "total_cost": int(order[b"total_cost"]),
+    }
+
+    return Response(json.dumps(return_order), mimetype="application/json", status=200)
 
 
 @app.post('/checkout/<order_id>')
