@@ -8,6 +8,12 @@ import redis
 
 gateway_url = os.environ['GATEWAY_URL']
 
+RANDOM_SEED = 444
+ID_BYTES_SIZE = 32
+
+# Set random seed to generate unique ids for the items
+random.seed(RANDOM_SEED)
+
 app = Flask("order-service")
 
 db: redis.Redis = redis.Redis(host=os.environ['REDIS_HOST'],
@@ -28,8 +34,8 @@ class Order:
     Order class that defines the saved information in order.
     """
 
-    def __init__(self, user_id: int):
-        self.order_id = f"order:{random.getrandbits(32)}"
+    def __init__(self, order_id: str, user_id: int):
+        self.order_id = order_id
         self.user_id = user_id
         self.items = {}
         self.paid = False
@@ -41,11 +47,13 @@ class Order:
 
         :return: The class dictionary.
         """
+        # Redis expects a dictionary of key-value pairs where the values can only be bytes, strings, integers, or floats
+        # Dictionaries and booleans are not supported.
         return {
             "order_id": self.order_id,
             "user_id": self.user_id,
-            "items": self.items,
-            "paid": self.paid,
+            "items": json.dumps(self.items),
+            "paid": int(self.paid),
             "total_cost": self.total_cost
         }
 
@@ -62,7 +70,13 @@ def create_order(user_id):
     if user_id < 0:
         return Response("The user id can not be negative number!", status=400)
 
-    new_order = Order(user_id=user_id)
+    # Create unique order id
+    new_order_id = f"order:{random.getrandbits(ID_BYTES_SIZE)}"
+    while db.hget(new_order_id, "order_id"):
+        new_order_id = f"order:{random.getrandbits(ID_BYTES_SIZE)}"
+
+    # Create a new order
+    new_order = Order(order_id=new_order_id, user_id=user_id)
 
     # Store to DB
     try:
