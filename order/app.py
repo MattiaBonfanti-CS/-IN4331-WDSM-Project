@@ -191,6 +191,8 @@ def remove_item(order_id, item_id):
     find_item_in_stock = f"{STOCK_SERVICE_URL}/find/{item_id}"
     try:
         response = requests.get(find_item_in_stock)
+        item = response.json()
+        # return Response(f"T {type(item)}", status=200)
         if response.status_code == 404:
             return Response(f"The item {item_id} does not exist in the DB.", status=404)
     except Exception as err:
@@ -213,8 +215,13 @@ def remove_item(order_id, item_id):
     except Exception as err:
         return Response(str(err), status=400)
 
-    # TODO: Update the total cost of the order
+    # Update the total cost of the order
+    try:
+        db.hincrby(order_id, "total_cost", -1 * item["price"])
+    except Exception as err:
+        return Response(str(err), status=400)
 
+    # Return success response
     return Response(f"The item {item_id} is removed from order {order_id}", status=200)
 
 
