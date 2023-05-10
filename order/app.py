@@ -133,7 +133,7 @@ def find_order(order_id):
         return Response(f"There isn't any order with {order_id} in the DB!", status=404)
 
     # Convert bytes to proper types
-    return_order = order.convert_order()
+    return_order = convert_order(order)
 
     return Response(json.dumps(return_order), mimetype="application/json", status=200)
 
