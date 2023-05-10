@@ -1,14 +1,16 @@
+import json
 import os
 import atexit
 import random
-import json
-import requests
+
 from flask import Flask, Response
+import requests
 import redis
 
 gateway_url = os.environ['GATEWAY_URL']
 
 STOCK_SERVICE_URL = f"{gateway_url}/stock"
+PAYMENT_SERVICE_URL = f"{gateway_url}/payment"
 
 RANDOM_SEED = 42
 ID_BYTES_SIZE = 32
@@ -39,7 +41,7 @@ def convert_order(order):
     """
     return {
         "order_id": order[b"order_id"].decode("utf-8"),
-        "user_id": int(order[b"user_id"]),
+        "user_id": order[b"user_id"].decode("utf-8"),
         "items": json.loads(order[b"items"].decode("utf-8")),
         "paid": json.loads(order[b"paid"].decode("utf-8")),
         "total_cost": int(order[b"total_cost"])
@@ -76,16 +78,16 @@ class Order:
 
 
 @app.post('/create/<user_id>')
-def create_order(user_id: int):
+def create_order(user_id: str):
     """
     Create a new empty order in the DB.
 
     :param user_id: The id of the user who creates the order, must be >= 0.
     :return: A success response if the order has been created and saved successfully, an error otherwise.
     """
-    user_id = int(user_id)
-    if user_id < 0:
-        return Response("The user id can not be negative number!", status=400)
+    user_id = str(user_id)
+    # if user_id < 0:
+    #     return Response("The user id can not be negative number!", status=400)
 
     # Create unique order id
     new_order_id = f"order:{random.getrandbits(ID_BYTES_SIZE)}"
@@ -184,19 +186,8 @@ def remove_item(order_id, item_id):
     order = convert_order(order)
 
     # Check if the order is paid
-    if order.get("paid"):
+    if order["paid"]:
         return Response(f"The order {order_id} is already paid!", status=400)
-
-    # Check if the item exists in the stock
-    find_item_in_stock = f"{STOCK_SERVICE_URL}/find/{item_id}"
-    try:
-        response = requests.get(find_item_in_stock)
-        item = response.json()
-        # return Response(f"T {type(item)}", status=200)
-        if response.status_code == 404:
-            return Response(f"The item {item_id} does not exist in the DB.", status=404)
-    except Exception as err:
-        return Response(str(err), status=400)
 
     # Check if the item exists in the order
     items = order["items"]
@@ -215,6 +206,25 @@ def remove_item(order_id, item_id):
     except Exception as err:
         return Response(str(err), status=400)
 
+    # Increase the amount of stock of the item by 1
+    add_stock = f"{STOCK_SERVICE_URL}/add/{item_id}/1"
+    try:
+        response = requests.post(add_stock)
+        if response.status_code != 200:
+            return Response(response.content, status=response.status_code)
+    except Exception as err:
+        return Response(str(err), status=404)
+
+    # Get the item
+    find_item = f"{STOCK_SERVICE_URL}/find/{item_id}"
+    try:
+        response = requests.get(find_item)
+        item = response.json()
+        if response.status_code != 200:
+            return Response(response.content, status=response.status_code)
+    except Exception as err:
+        return Response(str(err), status=404)
+
     # Update the total cost of the order
     try:
         db.hincrby(order_id, "total_cost", -1 * item["price"])
@@ -222,15 +232,50 @@ def remove_item(order_id, item_id):
         return Response(str(err), status=400)
 
     # Return success response
-    return Response(f"The item {item_id} is removed from order {order_id}", status=200)
+    return Response(f"The item {item_id} is removed from order {order_id} successfully!", status=200)
 
 
 @app.post('/checkout/<order_id>')
 def checkout(order_id):
-    # try:
-    #     order = db.hgetall(order_id)  # returns dictionary # check..
-    # except Exception as err:
-    #     return Response(str(err), status=400)
-    #
-    # remove_credit(order.user_id, order.order_id, order.total_cost)
-    pass
+    """
+    Checks out the given order.
+
+    :param order_id: The id of the order to be checked out.
+    :return: A success response if the operation is successful, an error otherwise.
+    """
+    # Get the order
+    order = db.hgetall(order_id)
+
+    # Check if the order exists
+    if not order:
+        return Response(f"The order {order_id} does not exist in the DB!", status=404)
+
+    # Convert bytes to proper types
+    order = convert_order(order)
+
+    # Check if the order is paid
+    if order["paid"]:
+        return Response(f"The order {order_id} is already paid!", status=400)
+
+    # Check if the order is empty
+    if not order["items"]:
+        return Response(f"The order {order_id} is empty!", status=400)
+
+    # Pay the order
+    user_id = order["user_id"]
+    pay_order = f"{PAYMENT_SERVICE_URL}/pay/{user_id}/{order_id}/{order['total_cost']}"
+    try:
+        response = requests.post(pay_order)
+        if response.status_code != 200:
+            return Response(response.content, status=response.status_code)
+    except Exception:
+        return Response(f"The user {user_id} does not exist in the DB.", status=404)
+
+    # Update the order status to paid
+    try:
+        db.hset(order_id, "paid", json.dumps(True))
+    except Exception as err:
+        return Response(str(err), status=400)
+
+    # Return success response
+    return Response(f"The order {order_id} is paid successfully.", status=200)
