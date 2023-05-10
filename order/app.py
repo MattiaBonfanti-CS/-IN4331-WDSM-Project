@@ -114,10 +114,14 @@ def remove_order(order_id):
     :return: Empty successful response if successful, otherwise error.
     """
     try:
-        db.delete(order_id)  # deletes the whole order and
+        result = db.delete(order_id)  # deletes the whole order and
                             # will return 0 if the entry does not exist
     except Exception as err:
         return Response(str(err), status=400)
+
+        # Check if the order exists
+    if not result:
+        return Response(f"The order {order_id} does not exist in the DB!", status=404)
 
     return Response(json.dumps(f"The order with id {order_id} is removed successfully."), mimetype="application/json", status=200)
 
