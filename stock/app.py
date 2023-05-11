@@ -84,7 +84,11 @@ def create_item(price: int):
         return Response(str(err), status=400)
 
     # Return success response
-    return Response(json.dumps(new_item.to_dict()), mimetype="application/json", status=200)
+    return_item = {
+        "item_id": new_item.item_id
+    }
+
+    return Response(json.dumps(return_item), mimetype="application/json", status=200)
 
 
 @app.get('/find/<item_id>')
@@ -102,7 +106,6 @@ def find_item(item_id: str):
 
     # Convert bytes to proper types
     return_item = {
-        "item_id": item[b"item_id"].decode("utf-8"),
         "price": int(item[b"price"]),
         "stock": int(item[b"stock"]),
     }
