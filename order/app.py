@@ -85,10 +85,6 @@ def create_order(user_id: str):
     :param user_id: The id of the user who creates the order, must be >= 0.
     :return: A success response if the order has been created and saved successfully, an error otherwise.
     """
-    user_id = str(user_id)
-    # if user_id < 0:
-    #     return Response("The user id can not be negative number!", status=400)
-
     # Create unique order id
     new_order_id = f"order:{random.getrandbits(ID_BYTES_SIZE)}"
     while db.hget(new_order_id, "order_id"):
@@ -210,16 +206,7 @@ def remove_item(order_id, item_id):
     except Exception as err:
         return Response(str(err), status=400)
 
-    # Increase the amount of stock of the item by 1
-    add_stock = f"{STOCK_SERVICE_URL}/add/{item_id}/1"
-    try:
-        response = requests.post(add_stock)
-        if response.status_code != 200:
-            return Response(response.content, status=response.status_code)
-    except Exception as err:
-        return Response(str(err), status=404)
-
-    # Get the item
+    # Get the item from the stock
     find_item = f"{STOCK_SERVICE_URL}/find/{item_id}"
     try:
         response = requests.get(find_item)
@@ -272,8 +259,18 @@ def checkout(order_id):
         response = requests.post(pay_order)
         if response.status_code != 200:
             return Response(response.content, status=response.status_code)
-    except Exception:
-        return Response(f"The user {user_id} does not exist in the DB.", status=404)
+    except Exception as err:
+        return Response(str(err), status=404)
+
+    # Decrease the amount of stock for the items in the order
+    for item_id, amount in order["items"].items():
+        remove_stock = f"{STOCK_SERVICE_URL}/subtract/{item_id}/{amount}"
+        try:
+            response = requests.post(remove_stock)
+            if response.status_code != 200:
+                return Response(response.content, status=response.status_code)
+        except Exception as err:
+            return Response(str(err), status=404)
 
     # Update the order status to paid
     try:
