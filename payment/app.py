@@ -3,7 +3,9 @@ import atexit
 
 from flask import Flask, Response
 import redis
-import Request
+import requests
+import json
+import random
 
 app = Flask("payment-service")
 
@@ -34,9 +36,9 @@ class User:
 def create_user():
 
     # Create new user id
-    new_user_id = f"item:{random.getrandbits(ID_BYTES_SIZE)}"
-    while db.hget(new_user_id, "item_id"):
-        new_user_id = f"item:{random.getrandbits(ID_BYTES_SIZE)}"
+    new_user_id = f"user:{random.getrandbits(ID_BYTES_SIZE)}"
+    while db.hget(new_user_id, "user_id"):
+        new_user_id = f"user:{random.getrandbits(ID_BYTES_SIZE)}"
     
     new_user = User(user_id=new_user_id)
     
@@ -54,7 +56,7 @@ def find_user(user_id: str):
     user = db.hgetall(user_id)
 
     if not user:
-        return Response(f"The user {item_id} does not exist in the DB!", status=404)
+        return Response(f"The user {user_id} does not exist in the DB!", status=404)
     
     return_item = {
         "user_id" : user[b"user_id"].decode("utf-8")
@@ -66,7 +68,7 @@ def find_user(user_id: str):
 @app.post('/add_funds/<user_id>/<amount>')
 def add_credit(user_id: str, amount: int):
     
-    if amount <= 0:
+    if int(amount) <= 0:
         body = {
             "done" : False
         }
@@ -79,7 +81,7 @@ def add_credit(user_id: str, amount: int):
         return Response(json.dumps(body), mimetype="application/json", status=200)
 
     try:
-        new_amount = db.hincrby(user_id, "credit", amount)
+        new_amount = db.hincrby(user_id, "credit", int(amount))
     except Exception as err:
         return Response(str(err), status=400)
 
@@ -92,7 +94,7 @@ def add_credit(user_id: str, amount: int):
 @app.post('/pay/<user_id>/<order_id>/<amount>')
 def remove_credit(user_id: str, order_id: str, amount: int):
     
-    if amount <= 0:
+    if int(amount) <= 0:
         return Response("The amount must be >0!", status=400)
 
     if not db.hget(user_id, "user_id"):
@@ -110,11 +112,11 @@ def remove_credit(user_id: str, order_id: str, amount: int):
 
     current_credit = int(db.hget(user_id, "credit"))
 
-    if current_credit < amount:
+    if current_credit < int(amount):
         return Response(f"Insufficient credit balance")
 
     try:
-        new_credit = db.hincrby(user_id, "credit", -1*amount)
+        new_credit = db.hincrby(user_id, "credit", -1*int(amount))
     except Exception as err:
         return Response(str(err), status=400)
 
