@@ -17,8 +17,12 @@ db: redis.Redis = redis.Redis(host=os.environ['REDIS_HOST'],
 def close_db_connection():
     db.close()
 
-gateway_url = os.environ['GATEWAY_URL']
-print(gateway_url)
+order_url = os.environ['GATEWAY_URL'] + "/orders/"
+stock_url = os.environ['GATEWAY_URL'] + "/stock/"
+
+RANDOM_SEED = 444
+ID_BYTES_SIZE = 32
+random.seed(RANDOM_SEED)
 
 atexit.register(close_db_connection)
 
@@ -48,8 +52,12 @@ def create_user():
     except Exception as exp:
         return Response(str(exp), status=400)
 
-    return Response("a", imetype="application/json", status=200)
-    return Response(json.dumps(new_user.to_dict()), mimetype="application/json", status=200)
+    return_user = {
+        "user_id" : new_user_id,
+        "credit" : 0,
+    }
+
+    return Response(json.dumps(return_user), mimetype="application/json", status=200)
 
 
 @app.get('/find_user/<user_id>')
@@ -61,10 +69,10 @@ def find_user(user_id: str):
         return Response(f"The user {user_id} does not exist in the DB!", status=404)
     
     return_user = {
-        "user_id" : user[b"user_id"].decode("utf-8"),
-        "credit" : int(user[b"credit"])
+        "user_id" : user_id,
+        "credit" : int(user[b"credit"]),
     }
-    return Response(return_user, mimetype="application/json", status=200)
+    return Response(json.dumps(return_user), mimetype="application/json", status=200)
 
 
 @app.post('/add_funds/<user_id>/<amount>')
@@ -85,7 +93,7 @@ def add_credit(user_id: str, amount: int):
     try:
         new_amount = db.hincrby(user_id, "credit", int(amount))
     except Exception as err:
-        return Response(str(err), status=400)
+        return Response("FUND FAILD : " + str(err), status=400)
 
     body = {
         "done" : True
@@ -102,7 +110,7 @@ def remove_credit(user_id: str, order_id: str, amount: int):
     if not db.hget(user_id, "user_id"):
         return Response(f"The user {user_id} does not exist in the DB!", status=404)
 
-    order_find_path = gateway_url + f"/order-service/orders/find/{order_id}"
+    order_find_path = order_url + "find/{order_id}"
     r = requests.get(order_find_path)
     response_json = json.load(r.json())
 
@@ -129,7 +137,7 @@ def cancel_payment(user_id: str, order_id: str):
     if not db.hget(user_id, "user_id"):
         return Response(f"The user {user_id} does not exist in the DB!", status=404)
     
-    order_find_path = gateway_url + f"/order-service/orders/find/{order_id}"
+    order_find_path = order_url + "find/{order_id}"
     r = requests.get(order_find_path)
     response_json = json.load(r.json())
 
@@ -142,9 +150,9 @@ def cancel_payment(user_id: str, order_id: str):
     # Add item back to stock
     item_list = response_json["items"]
 
-    for item in item_list:
+    for i in item_list:
         try:
-            stock_add_path = gateway_url + f"/stock-service/add{item}/1"
+            stock_add_path = stock_url + "add/{i}/1"
             requests.post(stock_add_path)
         except Exception as err:
             return Response(str(err), status=400)
@@ -164,7 +172,7 @@ def payment_status(user_id: str, order_id: str):
     if not db.hget(user_id, "user_id"):
         return Response(f"The user {user_id} does not exist in the DB!", status=404)
     
-    order_find_path = gateway_url + f"/order-service/orders/find/{order_id}"
+    order_find_path = order_url + "find/{order_id}"
     r = requests.get(order_find_path)
     response_json = json.load(r.json())
 
