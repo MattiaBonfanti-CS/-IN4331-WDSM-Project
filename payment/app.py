@@ -18,6 +18,7 @@ def close_db_connection():
     db.close()
 
 gateway_url = os.environ['GATEWAY_URL']
+print(gateway_url)
 
 atexit.register(close_db_connection)
 
@@ -47,6 +48,7 @@ def create_user():
     except Exception as exp:
         return Response(str(exp), status=400)
 
+    return Response("a", imetype="application/json", status=200)
     return Response(json.dumps(new_user.to_dict()), mimetype="application/json", status=200)
 
 
@@ -58,11 +60,11 @@ def find_user(user_id: str):
     if not user:
         return Response(f"The user {user_id} does not exist in the DB!", status=404)
     
-    return_item = {
-        "user_id" : user[b"user_id"].decode("utf-8")
+    return_user = {
+        "user_id" : user[b"user_id"].decode("utf-8"),
         "credit" : int(user[b"credit"])
     }
-    return Response(return_item, mimetype="application/json", status=200)
+    return Response(return_user, mimetype="application/json", status=200)
 
 
 @app.post('/add_funds/<user_id>/<amount>')
@@ -100,7 +102,7 @@ def remove_credit(user_id: str, order_id: str, amount: int):
     if not db.hget(user_id, "user_id"):
         return Response(f"The user {user_id} does not exist in the DB!", status=404)
 
-    order_find_path = gateway_url + f"order-service/orders/find/{order_id}"
+    order_find_path = gateway_url + f"/order-service/orders/find/{order_id}"
     r = requests.get(order_find_path)
     response_json = json.load(r.json())
 
@@ -127,7 +129,7 @@ def cancel_payment(user_id: str, order_id: str):
     if not db.hget(user_id, "user_id"):
         return Response(f"The user {user_id} does not exist in the DB!", status=404)
     
-    order_find_path = gateway_url + f"order-service/orders/find/{order_id}"
+    order_find_path = gateway_url + f"/order-service/orders/find/{order_id}"
     r = requests.get(order_find_path)
     response_json = json.load(r.json())
 
@@ -142,7 +144,7 @@ def cancel_payment(user_id: str, order_id: str):
 
     for item in item_list:
         try:
-            stock_add_path = gateway_url + f"stock-service/add{item}/1"
+            stock_add_path = gateway_url + f"/stock-service/add{item}/1"
             requests.post(stock_add_path)
         except Exception as err:
             return Response(str(err), status=400)
@@ -162,7 +164,7 @@ def payment_status(user_id: str, order_id: str):
     if not db.hget(user_id, "user_id"):
         return Response(f"The user {user_id} does not exist in the DB!", status=404)
     
-    order_find_path = gateway_url + f"order-service/orders/find/{order_id}"
+    order_find_path = gateway_url + f"/order-service/orders/find/{order_id}"
     r = requests.get(order_find_path)
     response_json = json.load(r.json())
 
