@@ -123,7 +123,7 @@ def remove_credit(user_id: str, order_id: str, amount: int):
     current_credit = int(db.hget(user_id, "credit"))
 
     if current_credit < int(amount):
-        return Response(f"Insufficient credit balance")
+        return Response(f"Insufficient credit balance", status=400)
 
     try:
         new_credit = db.hincrby(user_id, "credit", -1*int(amount))
@@ -137,7 +137,7 @@ def cancel_payment(user_id: str, order_id: str):
     if not db.hget(user_id, "user_id"):
         return Response(f"The user {user_id} does not exist in the DB!", status=404)
     
-    order_find_path = order_url + "find/{order_id}"
+    order_find_path = order_url + f"find/{order_id}"
     r = requests.get(order_find_path)
     response_json = json.load(r.json())
 
@@ -152,7 +152,7 @@ def cancel_payment(user_id: str, order_id: str):
 
     for i in item_list:
         try:
-            stock_add_path = stock_url + "add/{i}/1"
+            stock_add_path = stock_url + f"add/{i}/1"
             requests.post(stock_add_path)
         except Exception as err:
             return Response(str(err), status=400)
