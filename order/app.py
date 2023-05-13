@@ -53,7 +53,7 @@ class Order:
     Order class that defines the saved information in order.
     """
 
-    def __init__(self, order_id: str, user_id: int):
+    def __init__(self, order_id: str, user_id: str):
         self.order_id = order_id
         self.user_id = user_id
         self.items = {}
@@ -147,11 +147,17 @@ def add_item(order_id, item_id):
     Adds a given item in the given order.
 
     :param order_id: The id of the order.
-    :param item_id:
-    :return: A success response if the operation is successful, an error otherwise.
+    :param item_id: The id of the item to be added
+    :return: A successful response if the operation is successful, an error otherwise.
     """
+
+    # Retrieve order
+    try:
+        order = db.hgetall(order_id)  # returns dictionary
+    except Exception as err:
+        return Response(str(err), status=400)
+
     # Check if the order exists
-    order = db.hgetall(order_id)
     if not order:
         return Response(f"The order {order_id} does not exist in the DB!", status=404)
 
@@ -171,30 +177,23 @@ def add_item(order_id, item_id):
     except Exception as err:
         return Response(str(err), status=400)
 
-    item = json.loads(response.content)
-    # item_stock = item["stock"]
-    if item["stock"] <= 0:
-        return Response(f"There is no stock for this item {item}", status=400)
+    item_to_be_added = json.loads(response.content)
+    added_items = order.get("items")
 
-    items = order.get("items")
-    # db.hget(order_id, "items") # items = json.loads(items.decode("utf-8")) #order[b"items"].decode("utf-8")
+    if added_items.get(item_id, 0) + 1 > item_to_be_added["stock"]: # item_to_be_added["stock"] <= 0 |
+        return Response(f"There is no more available stock for this item {item_to_be_added['item_id']}", status=400)
 
     # Increase the field of item_id with 1 or add a new field
-    items[item_id] = items.get(item_id, 0) + 1
+    added_items[item_id] = added_items.get(item_id, 0) + 1
 
-    # Store to DB
+    # Add the item and update the total cost of the order in DB
     try:
-        db.hset(order_id, "items", json.dumps(items))  # overwrites the previous entry
+        db.hset(order_id, "items", json.dumps(added_items))  # overwrites the previous entry
+        db.hincrbyfloat(order_id, "total_cost", 1 * item_to_be_added["price"])  # increase the total cost
     except Exception as err:
         return Response(str(err), status=400)
 
-    # Update the total cost of the order in DB
-    try:
-        db.hincrbyfloat(order_id, "total_cost", 1 * item["price"])  # increase the total cost
-    except Exception as err:
-        return Response(str(err), status=400)
-
-    new_cost = order["total_cost"] + item["price"] # can be removed later, now for debug purpose
+    new_cost = order["total_cost"] + item_to_be_added["price"] # can be removed later, now for debug purpose
     return Response(f"A new item {item_id} is added to order {order_id}, total cost becomes {new_cost}", status=200)
 
 
