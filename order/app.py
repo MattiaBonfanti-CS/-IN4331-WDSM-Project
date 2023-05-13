@@ -98,9 +98,10 @@ def create_order(user_id: str):
         db.hset(new_order.order_id, mapping=new_order.to_dict())
     except Exception as err:
         return Response(str(err), status=400)
-
+    
     # Return success response
-    return Response(json.dumps(new_order.order_id), mimetype="application/json", status=200)
+    order_id_dict = {'order_id': new_order.to_dict()['order_id']}
+    return Response(json.dumps(order_id_dict), mimetype="application/json", status=200)
 
 
 @app.delete('/remove/<order_id>')
