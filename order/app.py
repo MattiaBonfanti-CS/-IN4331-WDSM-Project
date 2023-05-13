@@ -83,7 +83,7 @@ def create_order(user_id: str):
     Create a new empty order in the DB.
 
     :param user_id: The id of the user who creates the order, must be >= 0.
-    :return: A success response if the order has been created and saved successfully, an error otherwise.
+    :return: The order_id if the order has been created and saved successfully, an error otherwise.
     """
     # Create unique order id
     new_order_id = f"order:{random.getrandbits(ID_BYTES_SIZE)}"
@@ -117,7 +117,7 @@ def remove_order(order_id):
     except Exception as err:
         return Response(str(err), status=400)
 
-    # Check if the order exists
+    # Check the result
     if not result:
         return Response(f"The order {order_id} does not exist in the DB!", status=404)
 
@@ -188,13 +188,14 @@ def add_item(order_id, item_id):
     except Exception as err:
         return Response(str(err), status=400)
 
-    # Update the total cost of the order
+    # Update the total cost of the order in DB
     try:
-        db.hincrby(order_id, "total_cost", 1 * item["price"])  # increase the total cost
+        db.hincrbyfloat(order_id, "total_cost", 1 * item["price"])  # increase the total cost
     except Exception as err:
         return Response(str(err), status=400)
 
-    return Response(f"A new item {item_id} is added to order {order_id}", status=200)
+    new_cost = order["total_cost"] + item["price"] # can be removed later, now for debug purpose
+    return Response(f"A new item {item_id} is added to order {order_id}, total cost becomes {new_cost}", status=200)
 
 
 @app.delete('/removeItem/<order_id>/<item_id>')
