@@ -113,15 +113,16 @@ def remove_order(order_id):
     """
     try:
         result = db.delete(order_id)  # deletes the whole order and
-                            # will return 0 if the entry does not exist
+        # will return 0 if the entry does not exist
     except Exception as err:
         return Response(str(err), status=400)
 
-        # Check if the order exists
+    # Check if the order exists
     if not result:
         return Response(f"The order {order_id} does not exist in the DB!", status=404)
 
-    return Response(json.dumps(f"The order with id {order_id} is removed successfully."), mimetype="application/json", status=200)
+    return Response(json.dumps(f"The order with id {order_id} is removed successfully."),
+                    mimetype="application/json", status=200)
 
 
 @app.get('/find/<order_id>')
@@ -150,20 +151,50 @@ def add_item(order_id, item_id):
     :return: A success response if the operation is successful, an error otherwise.
     """
     # Check if the order exists
-    if not db.hget(order_id, "order_id"):
+    order = db.hgetall(order_id)
+    if not order:
         return Response(f"The order {order_id} does not exist in the DB!", status=404)
 
-    items = db.hget(order_id, "items")
+    # Convert bytes to proper types
+    order = convert_order(order)
+
+    # Check if the order is paid and abort if so
+    if order.get("paid"):
+        return Response(f"The order {order_id} is already paid!", status=400)
+
+    # Check if item exist in the stock and the stock is more than 0
+    find_item_in_stock = f"{STOCK_SERVICE_URL}/find/{item_id}"
+    try:
+        response = requests.get(find_item_in_stock)
+        if response.status_code != 200:
+            return Response(response.content, status=response.status_code)
+    except Exception as err:
+        return Response(str(err), status=400)
+
+    item = json.loads(response.content)
+    # item_stock = item["stock"]
+    if item["stock"] <= 0:
+        return Response(f"There is no stock for this item {item}", status=400)
+
+    items = order.get("items")
+    # db.hget(order_id, "items") # items = json.loads(items.decode("utf-8")) #order[b"items"].decode("utf-8")
+
     # Increase the field of item_id with 1 or add a new field
     items[item_id] = items.get(item_id, 0) + 1
 
     # Store to DB
     try:
-        db.hset(order_id, "items", items) # overwrites the previous entry
+        db.hset(order_id, "items", json.dumps(items))  # overwrites the previous entry
     except Exception as err:
         return Response(str(err), status=400)
 
-    return Response(f"A new item {item_id} is is added to order {order_id}", status=200)
+    # Update the total cost of the order
+    try:
+        db.hincrby(order_id, "total_cost", 1 * item["price"])  # increase the total cost
+    except Exception as err:
+        return Response(str(err), status=400)
+
+    return Response(f"A new item {item_id} is added to order {order_id}", status=200)
 
 
 @app.delete('/removeItem/<order_id>/<item_id>')
