@@ -99,8 +99,11 @@ def create_order(user_id: str):
     except Exception as err:
         return Response(str(err), status=400)
 
+    return_order = {
+        "order_id": new_order_id
+    }
     # Return success response
-    return Response(json.dumps(new_order.order_id), mimetype="application/json", status=200)
+    return Response(json.dumps(return_order), mimetype="application/json", status=200)
 
 
 @app.delete('/remove/<order_id>')
@@ -220,6 +223,7 @@ def remove_item(order_id, item_id):
     if order["paid"]:
         return Response(f"The order {order_id} is already paid!", status=400)
 
+
     # Check if the item exists in the order
     items = order["items"]
     if not items.get(item_id):
@@ -243,7 +247,7 @@ def remove_item(order_id, item_id):
         response = requests.get(find_item)
         item = response.json()
         if response.status_code != 200:
-            return Response(response.content, status=response.status_code)
+            return Response(str(response.content), status=response.status_code)
     except Exception as err:
         return Response(str(err), status=404)
 
@@ -257,13 +261,37 @@ def remove_item(order_id, item_id):
     return Response(f"The item {item_id} is removed from order {order_id} successfully!", status=200)
 
 
+def return_back_added_items(add_items) -> str:
+    for item_id, amount in add_items.items():
+        add_back_stock = f"{STOCK_SERVICE_URL}/add/{item_id}/{amount}"
+        try:
+            response = requests.post(add_back_stock)
+            if response.status_code != 200:
+                return f"Error when returning one of the items {item_id} " + str(response.content)
+        except Exception as err:
+            return "Error when returning items" + str(err)
+
+    return "Items were successfully returned!"
+
+
+def return_back_money(user_id, order_id) -> str:
+    cancel_order = f"{PAYMENT_SERVICE_URL}/cancel/{user_id}/{order_id}"
+    try:
+        response = requests.post(cancel_order)
+        if response.status_code != 200:
+            return "Cancellation of payment was not successful because " + str(response.content)
+    except Exception as err:
+        return "Cancellation of payment was not successful " + str(err)
+    return "Money were successfully returned back!"
+
+
 @app.post('/checkout/<order_id>')
 def checkout(order_id):
     """
     Checks out the given order.
 
     :param order_id: The id of the order to be checked out.
-    :return: A success response if the operation is successful, an error otherwise.
+    :return: The status of the order - success/failure or an error, otherwise.
     """
     # Get the order
     order = db.hgetall(order_id)
@@ -283,15 +311,9 @@ def checkout(order_id):
     if not order["items"]:
         return Response(f"The order {order_id} is empty!", status=400)
 
-    # Pay the order
-    user_id = order["user_id"]
-    pay_order = f"{PAYMENT_SERVICE_URL}/pay/{user_id}/{order_id}/{order['total_cost']}"
-    try:
-        response = requests.post(pay_order)
-        if response.status_code != 200:
-            return Response(response.content, status=response.status_code)
-    except Exception as err:
-        return Response(str(err), status=404)
+    add_items= {}
+
+    # TODO: We can check whether the user has enough balance /find_user endpoint
 
     # Decrease the amount of stock for the items in the order
     for item_id, amount in order["items"].items():
@@ -299,15 +321,34 @@ def checkout(order_id):
         try:
             response = requests.post(remove_stock)
             if response.status_code != 200:
-                return Response(response.content, status=response.status_code)
+                # return the added items
+                response_items = return_back_added_items(add_items)
+                return Response(str(response.content) + " Status of items " + response_items, status=response.status_code)
+            add_items[item_id] = amount
         except Exception as err:
-            return Response(str(err), status=404)
+            # return the added items
+            response_items = return_back_added_items(add_items)
+            return Response(str(err) + " Status of items " + response_items, status=404)
+
+    # Pay the order only when the items are retrieve
+    user_id = order["user_id"]
+    pay_order = f"{PAYMENT_SERVICE_URL}/pay/{user_id}/{order_id}/{order['total_cost']}"
+    try:
+        response = requests.post(pay_order)
+        if response.status_code != 200:
+            return Response(response.content, status=response.status_code)
+    except Exception as err:
+        # return the added items
+        response_items = return_back_added_items(add_items)
+        return Response(str(err) + " Status of items " + response_items, status=404)
 
     # Update the order status to paid
     try:
         db.hset(order_id, "paid", json.dumps(True))
     except Exception as err:
-        return Response(str(err), status=400)
+        # return the money of the user and items
+        return_money = return_back_money(order["user_id"],order["order_id"])
+        return Response(str(err) + " Status of payment " + return_money, status=400)
 
     # Return success response
     return Response(f"The order {order_id} is paid successfully.", status=200)
