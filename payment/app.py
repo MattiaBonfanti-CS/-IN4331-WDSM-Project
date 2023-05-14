@@ -17,8 +17,8 @@ db: redis.Redis = redis.Redis(host=os.environ['REDIS_HOST'],
 def close_db_connection():
     db.close()
 
-order_url = os.environ['GATEWAY_URL'] + "/orders/"
-stock_url = os.environ['GATEWAY_URL'] + "/stock/"
+order_url = "http://order-service:5000/"
+stock_url = "http://stock-service:5000/"
 
 RANDOM_SEED = 444
 ID_BYTES_SIZE = 32
@@ -138,7 +138,7 @@ def cancel_payment(user_id: str, order_id: str):
     
     order_find_path = order_url + f"find/{order_id}"
     r = requests.get(order_find_path)
-    response_json = json.load(r.json())
+    response_json = json.loads(r.text)
 
     if r.status_code==404:
         return Response(f"The order {order_id} does not exist in the DB!", status=404)
@@ -173,7 +173,7 @@ def payment_status(user_id: str, order_id: str):
     
     order_find_path = order_url + "find/{order_id}"
     r = requests.get(order_find_path)
-    response_json = json.load(r.json())
+    response_json = json.loads(r.text)
 
     if r.status_code==404:
         return Response(f"The order {order_id} does not exist in the DB!", status=404)
