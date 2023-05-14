@@ -223,7 +223,6 @@ def remove_item(order_id, item_id):
     if order["paid"]:
         return Response(f"The order {order_id} is already paid!", status=400)
 
-
     # Check if the item exists in the order
     items = order["items"]
     if not items.get(item_id):
@@ -336,7 +335,8 @@ def checkout(order_id):
     try:
         response = requests.post(pay_order)
         if response.status_code != 200:
-            return Response(response.content, status=response.status_code)
+            response_items = return_back_added_items(add_items)
+            return Response(str(response.content) + " Status of items " + response_items, status=response.status_code)
     except Exception as err:
         # return the added items
         response_items = return_back_added_items(add_items)
@@ -347,7 +347,7 @@ def checkout(order_id):
         db.hset(order_id, "paid", json.dumps(True))
     except Exception as err:
         # return the money of the user and items
-        return_money = return_back_money(order["user_id"],order["order_id"])
+        return_money = return_back_money(order["user_id"], order["order_id"])
         return Response(str(err) + " Status of payment " + return_money, status=400)
 
     # Return success response
