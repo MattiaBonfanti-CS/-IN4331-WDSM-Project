@@ -112,12 +112,11 @@ def remove_credit(user_id: str, order_id: str, amount: int):
 
     order_find_path = order_url + "find/{order_id}"
     r = requests.get(order_find_path)
-    response_json = json.load(r.json())
 
     if r.status_code==404:
         return Response(f"The order {order_id} does not exist in the DB!", status=404)
 
-    if bool(response_json["paid"]):
+    if bool(json.loads(r.text)['paid']):
         return Response(f"The order {order_id} has been already paid", status=400)
 
     current_credit = int(db.hget(user_id, "credit"))
