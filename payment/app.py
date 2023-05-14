@@ -110,7 +110,7 @@ def remove_credit(user_id: str, order_id: str, amount: int):
     if not db.hget(user_id, "user_id"):
         return Response(f"The user {user_id} does not exist in the DB!", status=404)
 
-    order_find_path = order_url + "find/{order_id}"
+    order_find_path = order_url + f"find/{order_id}"
     r = requests.get(order_find_path)
 
     if r.status_code==404:
