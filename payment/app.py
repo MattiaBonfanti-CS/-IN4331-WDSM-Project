@@ -1,5 +1,7 @@
+import json
 import os
 import atexit
+import random
 
 from flask import Flask, Response
 import redis
@@ -37,24 +39,48 @@ class User:
             "credit" : self.credit,
         }
 
+class User:
+    def __init__(self, user_id: str):
+        self.user_id = user_id
+        self.credit = 0
+
+    def to_dict(self):
+        return {
+            "user_id": self.user_id,
+            "credit": self.credit,
+        }
+
+
+class Payment:
+    def __init__(self, order_id: str, amount: int, status: bool):
+        self.order_id = order_id
+        self.amount = amount
+        self.status = status
+
+    def to_dict(self):
+        return {
+            "order_id": self.order_id,
+            "amount": self.amount,
+            "status": f"{self.status}"
+        }
+
+
 @app.post('/create_user')
 def create_user():
-
     # Create new user id
     new_user_id = f"user:{random.getrandbits(ID_BYTES_SIZE)}"
     while db.hget(new_user_id, "user_id"):
         new_user_id = f"user:{random.getrandbits(ID_BYTES_SIZE)}"
-    
+
     new_user = User(user_id=new_user_id)
-    
+
     try:
         db.hset(new_user.user_id, mapping=new_user.to_dict())
     except Exception as exp:
         return Response(str(exp), status=400)
 
     return_user = {
-        "user_id" : new_user_id,
-        "credit" : 0,
+        "user_id": new_user_id
     }
 
     return Response(json.dumps(return_user), mimetype="application/json", status=200)
@@ -62,125 +88,139 @@ def create_user():
 
 @app.get('/find_user/<user_id>')
 def find_user(user_id: str):
-    
     user = db.hgetall(user_id)
 
     if not user:
         return Response(f"The user {user_id} does not exist in the DB!", status=404)
-    
+
     return_user = {
-        "user_id" : user_id,
-        "credit" : int(user[b"credit"]),
+        "user_id": user_id,
+        "credit": int(user[b"credit"]),
     }
     return Response(json.dumps(return_user), mimetype="application/json", status=200)
 
 
 @app.post('/add_funds/<user_id>/<amount>')
 def add_credit(user_id: str, amount: int):
-    
-    if int(amount) <= 0:
-        body = {
-            "done" : False
-        }
-        return Response(json.dumps(body), mimetype="application/json", status=200)
-
-    if not db.hget(user_id, "user_id"):
-        body = {
-            "done" : False
-        }
-        return Response(json.dumps(body), mimetype="application/json", status=200)
-
-    try:
-        new_amount = db.hincrby(user_id, "credit", int(amount))
-    except Exception as err:
-        return Response("FUND FAILD : " + str(err), status=400)
-
-    body = {
-        "done" : True
-    }
-
-    return Response(json.dumps(body), mimetype="application/json", status=200)
-
-@app.post('/pay/<user_id>/<order_id>/<amount>')
-def remove_credit(user_id: str, order_id: str, amount: int):
-    
-    if int(amount) <= 0:
-        return Response("The amount must be >0!", status=400)
+    amount = int(amount)
+    if amount <= 0:
+        return Response("The amount must be > 0!", status=400)
 
     if not db.hget(user_id, "user_id"):
         return Response(f"The user {user_id} does not exist in the DB!", status=404)
 
-    order_find_path = order_url + f"find/{order_id}"
-    r = requests.get(order_find_path)
+    try:
+        new_amount = db.hincrby(user_id, "credit", amount)
+    except Exception as err:
+        return Response("FUND FAILED : " + str(err), status=400)
 
-    if r.status_code==404:
-        return Response(f"The order {order_id} does not exist in the DB!", status=404)
+    body = {
+        "done": True,
+        "message": f"The new credit for user {user_id} is {new_amount}"
+    }
 
-    if bool(json.loads(r.text)['paid']):
-        return Response(f"The order {order_id} has been already paid", status=400)
+    return Response(json.dumps(body), mimetype="application/json", status=200)
 
+
+@app.post('/pay/<user_id>/<order_id>/<amount>')
+def remove_credit(user_id: str, order_id: str, amount: int):
+    # Check the amount
+    amount = int(amount)
+    if amount <= 0:
+        return Response("The amount must be > 0!", status=400)
+
+    # Check if the user exists
+    if not db.hget(user_id, "user_id"):
+        return Response(f"The user {user_id} does not exist in the DB!", status=404)
+
+    # Check if the user has enough credit
     current_credit = int(db.hget(user_id, "credit"))
-
-    if current_credit < int(amount):
+    if current_credit < amount:
         return Response(f"Insufficient credit balance", status=400)
 
+    # Check if the orders been paid already
+    order_payment = db.hgetall(order_id)
+
+    # Create payment instance for the order if it does not exists yet
+    if not order_payment:
+        order_payment = Payment(
+            order_id=order_id,
+            amount=amount,
+            status=False
+        )
+
+        try:
+            db.hset(order_payment.order_id, mapping=order_payment.to_dict())
+        except Exception as exp:
+            return Response(str(exp), status=400)
+    else:
+        order_payment = Payment(
+            order_id=order_id,
+            amount=amount,
+            status=order_payment[b"status"].decode("utf-8") == "True"
+        )
+
+    if order_payment.status:
+        return Response(f"The order {order_id} has been paid already!", status=400)
+
+    # Proceed with completing the payment
     try:
-        new_credit = db.hincrby(user_id, "credit", -1*int(amount))
+        new_credit = db.hincrby(user_id, "credit", -1 * amount)
+        db.hset(order_id, "status", "True")
     except Exception as err:
         return Response(str(err), status=400)
 
     return Response(f"The payment of the order {order_id} is paid", status=200)
 
+
 @app.post('/cancel/<user_id>/<order_id>')
 def cancel_payment(user_id: str, order_id: str):
+    # Check if user exists
     if not db.hget(user_id, "user_id"):
         return Response(f"The user {user_id} does not exist in the DB!", status=404)
-    
-    order_find_path = order_url + f"find/{order_id}"
-    r = requests.get(order_find_path)
-    response_json = json.loads(r.text)
 
-    if r.status_code==404:
-        return Response(f"The order {order_id} does not exist in the DB!", status=404)
+    # Check if the payment order exists
+    if not db.hget(order_id, "order_id"):
+        return Response(f"The payment for order {order_id} does not exist in the DB!", status=404)
 
-    if not bool(response_json["paid"]):
-        return Response(f"The payment of the order {order_id} has not been made yet", status=400)
+    # Retrieve information from the database about the order payment
+    order_payment = db.hgetall(order_id)
+    order_payment = {
+        "order_id": order_id,
+        "amount": int(order_payment[b"amount"]),
+        "status": order_payment[b"status"].decode("utf-8") == "True"
+    }
 
-    # Add item back to stock
-    item_list = response_json["items"]
+    if not order_payment["status"]:
+        return Response(f"The payment for order {order_id} has been cancelled already!", status=400)
 
-    for i in item_list:
-        try:
-            stock_add_path = stock_url + f"add/{i}/1"
-            requests.post(stock_add_path)
-        except Exception as err:
-            return Response(str(err), status=400)
-
-    # Refund
-    refund_amount = int(response_json["total_cost"])
+    # Invalidate the payment and reimburse the user
     try:
-        db.hincrby(user_id, "credit", refund_amount)
+        new_credit = db.hincrby(user_id, "credit", order_payment["amount"])
+        db.hset(order_id, "status", "False")
     except Exception as err:
         return Response(str(err), status=400)
 
-    return Response(f"The order {order_id} is canceled successfully!", status=200)
+    return Response(f"The payment of the order {order_id} has been cancelled and the current credit for user {user_id} is {new_credit}", status=200)
+
 
 @app.post('/status/<user_id>/<order_id>')
 def payment_status(user_id: str, order_id: str):
-    
+    # Check if user exists
     if not db.hget(user_id, "user_id"):
         return Response(f"The user {user_id} does not exist in the DB!", status=404)
-    
-    order_find_path = order_url + "find/{order_id}"
-    r = requests.get(order_find_path)
-    response_json = json.loads(r.text)
 
-    if r.status_code==404:
-        return Response(f"The order {order_id} does not exist in the DB!", status=404)
+    # Check if the payment order exists
+    if not db.hget(order_id, "order_id"):
+        return Response(f"The payment for order {order_id} does not exist in the DB!", status=404)
 
-    body = {
-        "paid" : bool(response_json["paid"])
+    order_payment = db.hgetall(order_id)
+    order_payment = {
+        "order_id": order_id,
+        "amount": int(order_payment[b"amount"]),
+        "status": order_payment[b"status"].decode("utf-8") == "True"
     }
 
-    return Response(json.dumps(body), mimetype="application/json", status=200)
-
+    return {
+        "paid": order_payment["status"]
+    }
