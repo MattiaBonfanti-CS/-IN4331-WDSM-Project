@@ -5,9 +5,7 @@ import random
 
 from flask import Flask, Response
 import redis
-import requests
-import json
-import random
+
 
 app = Flask("payment-service")
 
@@ -16,11 +14,10 @@ db: redis.Redis = redis.Redis(host=os.environ['REDIS_HOST'],
                               password=os.environ['REDIS_PASSWORD'],
                               db=int(os.environ['REDIS_DB']))
 
+
 def close_db_connection():
     db.close()
 
-order_url = "http://order-service:5000/"
-stock_url = "http://stock-service:5000/"
 
 RANDOM_SEED = 444
 ID_BYTES_SIZE = 32
@@ -28,16 +25,6 @@ random.seed(RANDOM_SEED)
 
 atexit.register(close_db_connection)
 
-class User:
-    def __init__(self, user_id: str):
-        self.user_id = user_id
-        self.credit = 0
-    
-    def to_dict(self):
-        return {
-            "user_id" : self.user_id,
-            "credit" : self.credit,
-        }
 
 class User:
     def __init__(self, user_id: str):
