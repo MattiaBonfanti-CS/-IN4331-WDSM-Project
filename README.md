@@ -1,7 +1,6 @@
-# Web-scale Data Management Project Template
+# Group 16 -  Web-scale Data Management Project
 
-Basic project structure with Python's Flask and Redis. 
-**You are free to use any web framework in any language and any database you like for this project.**
+Web-scale Data Management project structure with Python's Flask and Redis. 
 
 ### Project structure
 
