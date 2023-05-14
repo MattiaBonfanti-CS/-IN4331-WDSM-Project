@@ -1,0 +1,11 @@
+Our contributions for the project so far are:
+- Mattia
+
+- Violeta
+
+- Nevena
+
+- Taichi
+
+- Dyon
+Worked on implementation of the payment service
