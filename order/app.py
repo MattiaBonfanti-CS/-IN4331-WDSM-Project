@@ -184,7 +184,7 @@ def add_item(order_id, item_id):
     added_items = order.get("items")
 
     if added_items.get(item_id, 0) + 1 > item_to_be_added["stock"]: # item_to_be_added["stock"] <= 0 |
-        return Response(f"There is no more available stock for this item {item_to_be_added['item_id']}", status=400)
+        return Response(f"There is no more available stock for this item {item_id}", status=400)
 
     # Increase the field of item_id with 1 or add a new field
     added_items[item_id] = added_items.get(item_id, 0) + 1
