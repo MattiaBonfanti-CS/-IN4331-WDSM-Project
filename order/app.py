@@ -347,8 +347,9 @@ def checkout(order_id):
         db.hset(order_id, "paid", json.dumps(True))
     except Exception as err:
         # return the money of the user and items
+        response_items = return_back_added_items(add_items)
         return_money = return_back_money(order["user_id"], order["order_id"])
-        return Response(str(err) + " Status of payment " + return_money, status=400)
+        return Response(str(err) + " Status of payment " + return_money + " Status of items " + response_items, status=400)
 
     # Return success response
     return Response(f"The order {order_id} is paid successfully.", status=200)
