@@ -48,7 +48,7 @@ class Payment:
         return {
             "order_id": self.order_id,
             "amount": self.amount,
-            "status": self.status
+            "status": f"{self.status}"
         }
 
 
@@ -120,6 +120,11 @@ def remove_credit(user_id: str, order_id: str, amount: int):
     if not db.hget(user_id, "user_id"):
         return Response(f"The user {user_id} does not exist in the DB!", status=404)
 
+    # Check if the user has enough credit
+    current_credit = int(db.hget(user_id, "credit"))
+    if current_credit < amount:
+        return Response(f"Insufficient credit balance", status=400)
+
     # Check if the orders been paid already
     order_payment = db.hgetall(order_id)
 
@@ -136,21 +141,16 @@ def remove_credit(user_id: str, order_id: str, amount: int):
         except Exception as exp:
             return Response(str(exp), status=400)
     else:
-        order_payment = {
-            "order_id": order_id,
-            "amount": amount,
-            "status": bool(order_payment[b"status"])
-        }
+        order_payment = Payment(
+            order_id=order_id,
+            amount=amount,
+            status=order_payment[b"status"].decode("utf-8") == "True"
+        )
 
-    if order_payment["status"]:
+    if order_payment.status:
         return Response(f"The order {order_id} has been paid already!", status=400)
 
     # Proceed with completing the payment
-    current_credit = int(db.hget(user_id, "credit"))
-
-    if current_credit < amount:
-        return Response(f"Insufficient credit balance", status=400)
-
     try:
         new_credit = db.hincrby(user_id, "credit", -1 * amount)
         db.hset(order_id, "status", "True")
@@ -175,7 +175,7 @@ def cancel_payment(user_id: str, order_id: str):
     order_payment = {
         "order_id": order_id,
         "amount": int(order_payment[b"amount"]),
-        "status": bool(order_payment[b"status"])
+        "status": order_payment[b"status"].decode("utf-8") == "True"
     }
 
     if not order_payment["status"]:
@@ -201,6 +201,13 @@ def payment_status(user_id: str, order_id: str):
     if not db.hget(order_id, "order_id"):
         return Response(f"The payment for order {order_id} does not exist in the DB!", status=404)
 
+    order_payment = db.hgetall(order_id)
+    order_payment = {
+        "order_id": order_id,
+        "amount": int(order_payment[b"amount"]),
+        "status": order_payment[b"status"].decode("utf-8") == "True"
+    }
+
     return {
-        "paid": bool(db.hget(order_id, "status"))
+        "paid": order_payment["status"]
     }
