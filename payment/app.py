@@ -183,8 +183,11 @@ def cancel_payment(user_id: str, order_id: str):
 
     # Invalidate the payment and reimburse the user
     try:
-        new_credit = db.hincrby(user_id, "credit", order_payment["amount"])
-        db.hset(order_id, "status", "False")
+        serialized_transaction = db.pipeline()
+        serialized_transaction.hincrby(user_id, "credit", order_payment["amount"])
+        serialized_transaction.hset(order_id, "status", "False")
+        results = serialized_transaction.execute()
+        new_credit = results[0]
     except Exception as err:
         return Response(str(err), status=400)
 
