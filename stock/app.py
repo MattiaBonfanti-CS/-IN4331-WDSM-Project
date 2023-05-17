@@ -137,12 +137,14 @@ def add_stock(item_id: str, amount: int):
     if amount <= 0:
         return Response("The amount must be > 0!", status=400)
 
-    if not db.hget(item_id, "item_id"):
-        return Response(f"The item {item_id} does not exist in the DB!", status=404)
-
     # Lock the item
     item_lock = Redlock(key=item_id, masters={db}, auto_release_time=LOCK_AUTORELEASE_TIME)
     if item_lock.acquire():
+        if not db.hget(item_id, "item_id"):
+            # Release the lock
+            item_lock.release()
+            return Response(f"The item {item_id} does not exist in the DB!", status=404)
+
         # Increase the stock amount of the item
         try:
             new_amount = db.hincrby(item_id, "stock", amount)
@@ -150,13 +152,13 @@ def add_stock(item_id: str, amount: int):
             # Release the lock
             item_lock.release()
             return Response(str(err), status=400)
+
+        # Release the lock
+        item_lock.release()
+
+        return Response(f"The new stock amount for item {item_id} is {new_amount}", status=200)
     else:
         return Response(f"The item {item_id} is locked, try later", status=400)
-
-    # Release the lock
-    item_lock.release()
-
-    return Response(f"The new stock amount for item {item_id} is {new_amount}", status=200)
 
 
 @app.post('/subtract/<item_id>/<amount>')
@@ -172,12 +174,14 @@ def remove_stock(item_id: str, amount: int):
     if amount <= 0:
         return Response("The amount must be > 0!", status=400)
 
-    if not db.hget(item_id, "item_id"):
-        return Response(f"The item {item_id} does not exist in the DB!", status=404)
-
     # Lock the item
     item_lock = Redlock(key=item_id, masters={db}, auto_release_time=LOCK_AUTORELEASE_TIME)
     if item_lock.acquire():
+        if not db.hget(item_id, "item_id"):
+            # Release the lock
+            item_lock.release()
+            return Response(f"The item {item_id} does not exist in the DB!", status=404)
+
         # Check if the amount is greater than the items in stock
         current_amount = int(db.hget(item_id, "stock"))
 
@@ -193,10 +197,10 @@ def remove_stock(item_id: str, amount: int):
             # Release the lock
             item_lock.release()
             return Response(str(err), status=400)
+
+        # Release the lock
+        item_lock.release()
+
+        return Response(f"The new stock amount for item {item_id} is {new_amount}", status=200)
     else:
         return Response(f"The item {item_id} is locked, try later", status=400)
-
-    # Release the lock
-    item_lock.release()
-
-    return Response(f"The new stock amount for item {item_id} is {new_amount}", status=200)
