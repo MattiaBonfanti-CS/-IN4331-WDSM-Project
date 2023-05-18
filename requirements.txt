@@ -1,5 +1,4 @@
-requests==2.29.0
-Flask==2.3.1
-redis==4.5.4
-gunicorn==20.1.0
-pottery==3.0.0
+-r order/requirements.txt
+-r payment/requirements.txt
+-r stock/requirements.txt
+-r benchmark/requirements.txt
