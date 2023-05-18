@@ -8,8 +8,8 @@ import requests
 import redis
 
 
-STOCK_SERVICE_URL = f"{os.environ['USER_SERVICE_URL']}/stock"
-PAYMENT_SERVICE_URL = f"{os.environ['STOCK_SERVICE_URL']}/payment"
+STOCK_SERVICE_URL = os.environ['STOCK_SERVICE_URL']
+PAYMENT_SERVICE_URL = os.environ['USER_SERVICE_URL']
 
 RANDOM_SEED = 42
 ID_BYTES_SIZE = 32

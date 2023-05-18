@@ -19,8 +19,8 @@ services:
     build: ./order
     image: order:latest
     environment:
-      - USER_SERVICE_URL=http://gateway:80
-      - STOCK_SERVICE_URL=http://gateway:80
+      - USER_SERVICE_URL=http://gateway:80/payment
+      - STOCK_SERVICE_URL=http://gateway:80/stock
     command: gunicorn -b 0.0.0.0:5000 app:app -w 1 --timeout 10
     env_file:
       - env/order_redis.env

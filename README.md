@@ -29,10 +29,19 @@ Web-scale Data Management project structure with Python's Flask and Redis.
 
 #### docker-compose (local development)
 
-After coding the REST endpoint logic run `docker-compose up --build` in the base folder to test if your logic is correct
-(you can use the provided tests in the `\test` folder and change them as you wish). 
-
 ***Requirements:*** You need to have docker and docker-compose installed on your machine.
+
+After coding the REST endpoint logic run the following in the base folder to test if your logic is correct
+(you can use the provided tests in the `\test` folder and change them as you wish):
+
+```shell script
+docker-compose up --build
+```
+
+To shut off and remove the containers run:
+```shell script
+docker-compose down
+```
 
 #### minikube (local k8s cluster)
 
