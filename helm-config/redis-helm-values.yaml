@@ -1,6 +1,8 @@
 auth:
   password: redis
 master:
+  service:
+    type: NodePort
   persistence:
     size: 1Gi
   resources:
@@ -9,6 +11,8 @@ master:
       cpu: 1
 replica:
   replicaCount: 1
+  service:
+    type: NodePort
   persistence:
     size: 1Gi
   resources:
