@@ -283,13 +283,6 @@ def remove_item(order_id, item_id):
         else:
             del items[item_id]
 
-        # Update the order
-        try:
-            db.hset(order_id, "items", json.dumps(items))
-        except Exception as err:
-            order_lock.release()
-            return Response(str(err), status=400)
-
         # Get the item from the stock to check the price
         find_item = f"{STOCK_SERVICE_URL}/find/{item_id}"
         try:
