@@ -302,9 +302,12 @@ def remove_item(order_id, item_id):
             order_lock.release()
             return Response(str(err), status=404)
 
-        # Update the total cost of the order
+        # Update the order and the total cost of the order
         try:
-            db.hincrby(order_id, "total_cost", -1 * item["price"])
+            serialized_transaction = db.pipeline()
+            serialized_transaction.hset(order_id, "items", json.dumps(items))
+            serialized_transaction.hincrby(order_id, "total_cost", -1 * item["price"])
+            result = serialized_transaction.execute()
         except Exception as err:
             order_lock.release()
             return Response(str(err), status=400)
@@ -313,7 +316,9 @@ def remove_item(order_id, item_id):
         order_lock.release()
 
         # Return success response
-        return Response(f"The item {item_id} is removed from order {order_id} successfully!", status=200)
+        return Response(
+            f"The item {item_id} is removed from order {order_id} successfully! Total cost becomes {result[1]}.",
+            status=200)
     else:
         return Response(f"The order {order_id} is locked, try later", status=400)
 
