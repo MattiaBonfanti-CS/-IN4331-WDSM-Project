@@ -7,12 +7,14 @@ from flask import Flask, Response
 import requests
 import redis
 
+from pottery import Redlock
 
 STOCK_SERVICE_URL = os.environ['STOCK_SERVICE_URL']
 PAYMENT_SERVICE_URL = os.environ['USER_SERVICE_URL']
 
 RANDOM_SEED = 42
 ID_BYTES_SIZE = 32
+LOCK_AUTORELEASE_TIME = 0.1
 
 # Set random seed to generate unique ids for the items
 random.seed(RANDOM_SEED)
@@ -84,6 +86,10 @@ def create_order(user_id: str):
     :param user_id: The id of the user who creates the order, must be >= 0.
     :return: The order_id if the order has been created and saved successfully, an error otherwise.
     """
+    # TODO: Check user_id exists in payment
+
+    # order_lock = Redlock(key=order_id, masters={db}, auto_release_time=LOCK_AUTORELEASE_TIME) 
+
     # Create unique order id
     new_order_id = f"order:{random.getrandbits(ID_BYTES_SIZE)}"
     while db.hget(new_order_id, "order_id"):
@@ -113,34 +119,55 @@ def remove_order(order_id):
     :param order_id: The id of the order to be deleted.
     :return: Empty successful response if successful, otherwise error.
     """
-    try:
-        result = db.delete(order_id)  # deletes the whole order and
-        # will return 0 if the entry does not exist
-    except Exception as err:
-        return Response(str(err), status=400)
+    # Lock the order
+    order_lock = Redlock(key=order_id, masters={db}, auto_release_time=LOCK_AUTORELEASE_TIME)
 
-    # Check the result
-    if not result:
-        return Response(f"The order {order_id} does not exist in the DB!", status=404)
+    if order_lock.acquire():
+        try:
+            result = db.delete(order_id)  # deletes the whole order and
+            # will return 0 if the entry does not exist
+        except Exception as err:
+            order_lock.release()
+            return Response(str(err), status=400)
 
-    return Response(json.dumps(f"The order with id {order_id} is removed successfully."),
-                    mimetype="application/json", status=200)
+        # Check the result
+        if not result:
+            order_lock.release()
+            return Response(f"The order {order_id} does not exist in the DB!", status=404)
+
+        # Release the lock
+        order_lock.release()
+
+        return Response(json.dumps(f"The order with id {order_id} is removed successfully."),
+                        mimetype="application/json", status=200)
+    else:
+        return Response(f"The order {order_id} is locked, try later", status=400)
 
 
 @app.get('/find/<order_id>')
 def find_order(order_id):
-    try:
-        order = db.hgetall(order_id)  # returns dictionary
-    except Exception as err:
-        return Response(str(err), status=400)
 
-    if not order:
-        return Response(f"There isn't any order with {order_id} in the DB!", status=404)
+    # Lock the order
+    order_lock = Redlock(key=order_id, masters={db}, auto_release_time=LOCK_AUTORELEASE_TIME)
 
-    # Convert bytes to proper types
-    return_order = convert_order(order)
+    if order_lock.acquire():
+        try:
+            order = db.hgetall(order_id)  # returns dictionary
+        except Exception as err:
+            order_lock.release()
+            return Response(str(err), status=400)
 
-    return Response(json.dumps(return_order), mimetype="application/json", status=200)
+        order_lock.release()
+
+        if not order:
+            return Response(f"There isn't any order with {order_id} in the DB!", status=404)
+
+        # Convert bytes to proper types
+        return_order = convert_order(order)
+
+        return Response(json.dumps(return_order), mimetype="application/json", status=200)
+    else:
+        return Response(f"The order {order_id} is locked, try later", status=400)
 
 
 @app.post('/addItem/<order_id>/<item_id>')
@@ -152,51 +179,66 @@ def add_item(order_id, item_id):
     :param item_id: The id of the item to be added
     :return: A successful response if the operation is successful, an error otherwise.
     """
+    # Lock the order
+    order_lock = Redlock(key=order_id, masters={db}, auto_release_time=LOCK_AUTORELEASE_TIME)
+    if order_lock.acquire():
+        # Retrieve order
+        try:
+            order = db.hgetall(order_id)  # returns dictionary
+        except Exception as err:
+            order_lock.release()
+            return Response(str(err), status=400)
 
-    # Retrieve order
-    try:
-        order = db.hgetall(order_id)  # returns dictionary
-    except Exception as err:
-        return Response(str(err), status=400)
+        # Check if the order exists
+        if not order:
+            order_lock.release()
+            return Response(f"The order {order_id} does not exist in the DB!", status=404)
 
-    # Check if the order exists
-    if not order:
-        return Response(f"The order {order_id} does not exist in the DB!", status=404)
+        # Convert bytes to proper types
+        order = convert_order(order)
 
-    # Convert bytes to proper types
-    order = convert_order(order)
+        # Check if the order is paid and abort if so
+        if order.get("paid"):
+            order_lock.release()
+            return Response(f"The order {order_id} is already paid!", status=400)
 
-    # Check if the order is paid and abort if so
-    if order.get("paid"):
-        return Response(f"The order {order_id} is already paid!", status=400)
+        # Check if item exist in the stock and the stock is more than 0
+        find_item_in_stock = f"{STOCK_SERVICE_URL}/find/{item_id}"
+        try:
+            response = requests.get(find_item_in_stock)
+            if response.status_code != 200:
+                order_lock.release()
+                return Response(response.content, status=response.status_code)
+        except Exception as err:
+            order_lock.release()
+            return Response(str(err), status=400)
 
-    # Check if item exist in the stock and the stock is more than 0
-    find_item_in_stock = f"{STOCK_SERVICE_URL}/find/{item_id}"
-    try:
-        response = requests.get(find_item_in_stock)
-        if response.status_code != 200:
-            return Response(response.content, status=response.status_code)
-    except Exception as err:
-        return Response(str(err), status=400)
+        item_to_be_added = json.loads(response.content)
+        added_items = order.get("items")
 
-    item_to_be_added = json.loads(response.content)
-    added_items = order.get("items")
+        if added_items.get(item_id, 0) + 1 > item_to_be_added["stock"]: # item_to_be_added["stock"] <= 0 |
+            order_lock.release()
+            return Response(f"There is no more available stock for this item {item_id}", status=400)
 
-    if added_items.get(item_id, 0) + 1 > item_to_be_added["stock"]: # item_to_be_added["stock"] <= 0 |
-        return Response(f"There is no more available stock for this item {item_id}", status=400)
+        # Increase the field of item_id with 1 or add a new field
+        added_items[item_id] = added_items.get(item_id, 0) + 1
 
-    # Increase the field of item_id with 1 or add a new field
-    added_items[item_id] = added_items.get(item_id, 0) + 1
+        # Add the item and update the total cost of the order in DB
+        try:
+            serialized_transaction = db.pipeline()
+            serialized_transaction.hset(order_id, "items", json.dumps(added_items))  # overwrites the previous entry
+            serialized_transaction.hincrbyfloat(order_id, "total_cost", 1 * item_to_be_added["price"])  # increase the total cost
+            results = serialized_transaction.execute()
+        except Exception as err:
+            order_lock.release()
+            return Response(str(err), status=400)
 
-    # Add the item and update the total cost of the order in DB
-    try:
-        db.hset(order_id, "items", json.dumps(added_items))  # overwrites the previous entry
-        db.hincrbyfloat(order_id, "total_cost", 1 * item_to_be_added["price"])  # increase the total cost
-    except Exception as err:
-        return Response(str(err), status=400)
-
-    new_cost = order["total_cost"] + item_to_be_added["price"] # can be removed later, now for debug purpose
-    return Response(f"A new item {item_id} is added to order {order_id}, total cost becomes {new_cost}", status=200)
+        # new_cost = order["total_cost"] + item_to_be_added["price"] # can be removed later, now for debug purpose
+        order_lock.release()
+        
+        return Response(f"A new item {item_id} is added to order {order_id}, total cost becomes {results[1]}", status=200)
+    else:
+        return Response(f"The order {order_id} is locked, try later", status=400)
 
 
 @app.delete('/removeItem/<order_id>/<item_id>')
@@ -208,55 +250,69 @@ def remove_item(order_id, item_id):
     :param item_id: The item to be removed.
     :return: A success response if the operation is successful, an error otherwise.
     """
-    # Get the order
-    order = db.hgetall(order_id)
+    # Lock the order
+    order_lock = Redlock(key=order_id, masters={db}, auto_release_time=LOCK_AUTORELEASE_TIME)
 
-    # Check if the order exists
-    if not order:
-        return Response(f"The order {order_id} does not exist in the DB!", status=404)
+    if order_lock.acquire():
+        # Get the order
+        order = db.hgetall(order_id)
 
-    # Convert bytes to proper types
-    order = convert_order(order)
+        # Check if the order exists
+        if not order:
+            order_lock.release()
+            return Response(f"The order {order_id} does not exist in the DB!", status=404)
 
-    # Check if the order is paid
-    if order["paid"]:
-        return Response(f"The order {order_id} is already paid!", status=400)
+        # Convert bytes to proper types
+        order = convert_order(order)
 
-    # Check if the item exists in the order
-    items = order["items"]
-    if not items.get(item_id):
-        return Response(f"The item {item_id} does not exist in order {order_id}", status=404)
+        # Check if the order is paid
+        if order["paid"]:
+            order_lock.release()
+            return Response(f"The order {order_id} is already paid!", status=400)
 
-    # Decrease the number of items by 1 or delete the item
-    if items[item_id] > 1:
-        items[item_id] -= 1
+        # Check if the item exists in the order
+        items = order["items"]
+        if not items.get(item_id):
+            order_lock.release()
+            return Response(f"The item {item_id} does not exist in order {order_id}", status=404)
+
+        # Decrease the number of items by 1 or delete the item
+        if items[item_id] > 1:
+            items[item_id] -= 1
+        else:
+            del items[item_id]
+
+        # Get the item from the stock to check the price
+        find_item = f"{STOCK_SERVICE_URL}/find/{item_id}"
+        try:
+            response = requests.get(find_item)
+            item = response.json()
+            if response.status_code != 200:
+                order_lock.release()
+                return Response(str(response.content), status=response.status_code)
+        except Exception as err:
+            order_lock.release()
+            return Response(str(err), status=404)
+
+        # Update the order and the total cost of the order
+        try:
+            serialized_transaction = db.pipeline()
+            serialized_transaction.hset(order_id, "items", json.dumps(items))
+            serialized_transaction.hincrby(order_id, "total_cost", -1 * item["price"])
+            result = serialized_transaction.execute()
+        except Exception as err:
+            order_lock.release()
+            return Response(str(err), status=400)
+
+        # Release the lock
+        order_lock.release()
+
+        # Return success response
+        return Response(
+            f"The item {item_id} is removed from order {order_id} successfully! Total cost becomes {result[1]}.",
+            status=200)
     else:
-        del items[item_id]
-
-    # Update the order
-    try:
-        db.hset(order_id, "items", json.dumps(items))
-    except Exception as err:
-        return Response(str(err), status=400)
-
-    # Get the item from the stock
-    find_item = f"{STOCK_SERVICE_URL}/find/{item_id}"
-    try:
-        response = requests.get(find_item)
-        item = response.json()
-        if response.status_code != 200:
-            return Response(str(response.content), status=response.status_code)
-    except Exception as err:
-        return Response(str(err), status=404)
-
-    # Update the total cost of the order
-    try:
-        db.hincrby(order_id, "total_cost", -1 * item["price"])
-    except Exception as err:
-        return Response(str(err), status=400)
-
-    # Return success response
-    return Response(f"The item {item_id} is removed from order {order_id} successfully!", status=200)
+        return Response(f"The order {order_id} is locked, try later", status=400)
 
 
 def return_back_added_items(add_items) -> str:
@@ -280,7 +336,7 @@ def return_back_money(user_id, order_id) -> str:
             return "Cancellation of payment was not successful because " + str(response.content)
     except Exception as err:
         return "Cancellation of payment was not successful " + str(err)
-    return "Money were successfully returned back!"
+    return "Money were successfully returned!"
 
 
 @app.post('/checkout/<order_id>')
@@ -291,64 +347,84 @@ def checkout(order_id):
     :param order_id: The id of the order to be checked out.
     :return: The status of the order - success/failure or an error, otherwise.
     """
-    # Get the order
-    order = db.hgetall(order_id)
+    # Lock the order
+    order_lock = Redlock(key=order_id, masters={db}, auto_release_time=LOCK_AUTORELEASE_TIME)
 
-    # Check if the order exists
-    if not order:
-        return Response(f"The order {order_id} does not exist in the DB!", status=404)
+    if order_lock.acquire():
+        # Get the order
+        order = db.hgetall(order_id)
 
-    # Convert bytes to proper types
-    order = convert_order(order)
+        # Check if the order exists
+        if not order:
+            order_lock.release()
+            return Response(f"The order {order_id} does not exist in the DB!", status=404)
 
-    # Check if the order is paid
-    if order["paid"]:
-        return Response(f"The order {order_id} is already paid!", status=400)
+        # Convert bytes to proper types
+        order = convert_order(order)
 
-    # Check if the order is empty
-    if not order["items"]:
-        return Response(f"The order {order_id} is empty!", status=400)
+        # Check if the order is paid
+        if order["paid"]:
+            order_lock.release()
+            return Response(f"The order {order_id} is already paid!", status=400)
 
-    add_items= {}
+        # Check if the order is empty
+        if not order["items"]:
+            order_lock.release()
+            return Response(f"The order {order_id} is empty!", status=400)
 
-    # TODO: We can check whether the user has enough balance /find_user endpoint
+        add_items = {}
 
-    # Decrease the amount of stock for the items in the order
-    for item_id, amount in order["items"].items():
-        remove_stock = f"{STOCK_SERVICE_URL}/subtract/{item_id}/{amount}"
-        try:
-            response = requests.post(remove_stock)
-            if response.status_code != 200:
-                # return the added items
+        # Decrease the amount of stock for the items in the order
+        for item_id, amount in order["items"].items():
+            remove_stock = f"{STOCK_SERVICE_URL}/subtract/{item_id}/{amount}"
+            try:
+                response = requests.post(remove_stock)
+                if response.status_code != 200:
+                    # Return the added items
+                    response_items = return_back_added_items(add_items)
+                    # Release the lock
+                    order_lock.release()
+                    return Response(str(response.content) + "\nStatus of items " + response_items, status=response.status_code)
+                add_items[item_id] = amount
+            except Exception as err:
+                # Return the added items
                 response_items = return_back_added_items(add_items)
-                return Response(str(response.content) + " Status of items " + response_items, status=response.status_code)
-            add_items[item_id] = amount
+                # Release the lock
+                order_lock.release()
+                return Response(str(err) + "\nStatus of items " + response_items, status=404)
+
+        # Pay the order only when the items are successfully removed from the stock
+        user_id = order["user_id"]
+        pay_order = f"{PAYMENT_SERVICE_URL}/pay/{user_id}/{order_id}/{order['total_cost']}"
+        try:
+            response = requests.post(pay_order)
+            if response.status_code != 200:
+                response_items = return_back_added_items(add_items)
+                # Release the lock
+                order_lock.release()
+                return Response(str(response.content) + "\nStatus of items " + response_items, status=response.status_code)
         except Exception as err:
-            # return the added items
+            # Return the added items
             response_items = return_back_added_items(add_items)
-            return Response(str(err) + " Status of items " + response_items, status=404)
+            # Release the lock
+            order_lock.release()
+            return Response(str(err) + "\nStatus of items " + response_items, status=404)
 
-    # Pay the order only when the items are retrieve
-    user_id = order["user_id"]
-    pay_order = f"{PAYMENT_SERVICE_URL}/pay/{user_id}/{order_id}/{order['total_cost']}"
-    try:
-        response = requests.post(pay_order)
-        if response.status_code != 200:
+        # Update the order status to paid
+        try:
+            db.hset(order_id, "paid", json.dumps(True))
+        except Exception as err:
+            # Return the money of the user and items
             response_items = return_back_added_items(add_items)
-            return Response(str(response.content) + " Status of items " + response_items, status=response.status_code)
-    except Exception as err:
-        # return the added items
-        response_items = return_back_added_items(add_items)
-        return Response(str(err) + " Status of items " + response_items, status=404)
+            return_money = return_back_money(order["user_id"], order["order_id"])
+            # Release the lock
+            order_lock.release()
+            return Response(str(err) + "\nStatus of payment " + return_money + "\nStatus of items " + response_items, status=400)
 
-    # Update the order status to paid
-    try:
-        db.hset(order_id, "paid", json.dumps(True))
-    except Exception as err:
-        # return the money of the user and items
-        response_items = return_back_added_items(add_items)
-        return_money = return_back_money(order["user_id"], order["order_id"])
-        return Response(str(err) + " Status of payment " + return_money + " Status of items " + response_items, status=400)
+        # Release the lock
+        order_lock.release()
 
-    # Return success response
-    return Response(f"The order {order_id} is paid successfully.", status=200)
+        # Return success response
+        return Response(f"The order {order_id} is paid successfully.", status=200)
+    else:
+        return Response(f"The order {order_id} is locked, try later", status=400)
