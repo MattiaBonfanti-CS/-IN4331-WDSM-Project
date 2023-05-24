@@ -29,17 +29,41 @@ Web-scale Data Management project structure with Python's Flask and Redis.
 
 #### docker-compose (local development)
 
-After coding the REST endpoint logic run `docker-compose up --build` in the base folder to test if your logic is correct
-(you can use the provided tests in the `\test` folder and change them as you wish). 
-
 ***Requirements:*** You need to have docker and docker-compose installed on your machine.
+
+After coding the REST endpoint logic run the following in the base folder to test if your logic is correct
+(you can use the provided tests in the `\test` folder and change them as you wish):
+
+```shell script
+docker-compose up --build
+```
+
+To shut off and remove the containers run:
+```shell script
+docker-compose down
+```
 
 #### minikube (local k8s cluster)
 
 This setup is for local k8s testing to see if your k8s config works before deploying to the cloud. 
-First deploy your database using helm by running the `deploy-charts-minicube.sh` file (in this example the DB is Redis 
-but you can find any database you want in https://artifacthub.io/ and adapt the script). Then adapt the k8s configuration files in the
-`\k8s` folder to mach your system and then run `kubectl apply -f .` in the k8s folder. 
+
+First add the Redis Chart repository to Helm:
+```shell script
+helm repo add bitnami https://charts.bitnami.com/bitnami
+helm repo update
+```
+
+Then deploy the database chart as well as the services pods using:
+
+```shell script
+./deploy-charts-minikube.sh
+```
+
+To remove the deployments:
+
+```shell script
+./remove-charts-minikube.sh
+```
 
 ***Requirements:*** You need to have minikube (with ingress enabled) and helm installed on your machine.
 
