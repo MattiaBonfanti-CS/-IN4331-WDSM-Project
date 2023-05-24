@@ -53,3 +53,16 @@ spec:
               value: "redis"
             - name: REDIS_DB
               value: "0"
+---
+apiVersion: autoscaling/v1
+kind: HorizontalPodAutoscaler
+metadata:
+  name: order-autoscaler
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: order-deployment
+  minReplicas: 1
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 45

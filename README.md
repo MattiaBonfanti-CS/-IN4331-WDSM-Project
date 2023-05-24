@@ -47,6 +47,15 @@ docker-compose down
 
 This setup is for local k8s testing to see if your k8s config works before deploying to the cloud. 
 
+***Requirements:*** 
+- You need to have minukube installed on your machine: https://minikube.sigs.k8s.io/docs/start/
+- Minikube must have the `ingress` and `metrics-server` addons enabled:
+```shell script
+minikube addons enable ingress
+minikube addons enable metrics-server
+```
+- Helm must be installed installed on your machine: https://helm.sh/docs/intro/install/
+
 First add the Redis Chart repository to Helm:
 ```shell script
 helm repo add bitnami https://charts.bitnami.com/bitnami
@@ -64,8 +73,6 @@ To remove the deployments:
 ```shell script
 ./remove-charts-minikube.sh
 ```
-
-***Requirements:*** You need to have minikube (with ingress enabled) and helm installed on your machine.
 
 #### kubernetes cluster (managed k8s cluster in the cloud)
 
