@@ -7,10 +7,9 @@ from flask import Flask, Response
 import requests
 import redis
 
-gateway_url = os.environ['GATEWAY_URL']
 
-STOCK_SERVICE_URL = f"{gateway_url}/stock"
-PAYMENT_SERVICE_URL = f"{gateway_url}/payment"
+STOCK_SERVICE_URL = os.environ['STOCK_SERVICE_URL']
+PAYMENT_SERVICE_URL = os.environ['USER_SERVICE_URL']
 
 RANDOM_SEED = 42
 ID_BYTES_SIZE = 32
