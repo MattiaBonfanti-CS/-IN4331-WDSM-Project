@@ -236,7 +236,8 @@ def add_item(order_id, item_id):
             return Response(str(err), status=400)
 
         # new_cost = order["total_cost"] + item_to_be_added["price"] # can be removed later, now for debug purpose
-
+        order_lock.release()
+        
         return Response(f"A new item {item_id} is added to order {order_id}, total cost becomes {results[1]}", status=200)
     else:
         return Response(f"The order {order_id} is locked, try later", status=400)
