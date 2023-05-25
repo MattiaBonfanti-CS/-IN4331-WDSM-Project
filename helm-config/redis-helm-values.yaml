@@ -4,18 +4,24 @@ master:
   service:
     type: NodePort
   persistence:
-    size: 1Gi
+    size: 256Mi
   resources:
+    limits:
+      memory: 512Mi
+      cpu: 500m
     requests:
-      memory: 1Gi
-      cpu: 1
+      memory: 512Mi
+      cpu: 500m
 replica:
   replicaCount: 1
   service:
     type: NodePort
   persistence:
-    size: 1Gi
+    size: 256Mi
   resources:
+    limits:
+      memory: 512Mi
+      cpu: 500m
     requests:
-      memory: 1Gi
-      cpu: 1
+      memory: 512Mi
+      cpu: 500m
