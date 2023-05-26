@@ -31,11 +31,11 @@ spec:
           imagePullPolicy: Never
           resources:
             limits:
-              memory: "1Gi"
-              cpu: "1"
+              memory: "256Mi"
+              cpu: "200m"
             requests:
-              memory: "1Gi"
-              cpu: "1"
+              memory: "128Mi"
+              cpu: "150m"
           command: ["gunicorn"]
           args: ["-b", "0.0.0.0:5000", "app:app"]
           ports:
@@ -49,3 +49,16 @@ spec:
               value: "redis"
             - name: REDIS_DB
               value: "0"
+---
+apiVersion: autoscaling/v1
+kind: HorizontalPodAutoscaler
+metadata:
+  name: stock-autoscaler
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: stock-deployment
+  minReplicas: 4
+  maxReplicas: 8
+  targetCPUUtilizationPercentage: 45
