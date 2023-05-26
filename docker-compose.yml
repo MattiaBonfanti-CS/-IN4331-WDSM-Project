@@ -11,7 +11,9 @@ services:
       - order-service
       - order-db
       - stock-service
-      - stock-db
+      - stock-db-0
+      - stock-db-1
+      - stock-db-2
       - payment-service
       - payment-db
 
@@ -38,11 +40,23 @@ services:
     env_file:
       - env/stock_redis.env
 
-  stock-db:
+  stock-db-0:
     image: redis:latest
-    command: redis-server --requirepass redis --maxmemory 512mb
+    command: redis-server --requirepass redis --maxmemory 128mb
     ports:
-      - 8002:6379
+      - 8020:6379
+
+  stock-db-1:
+    image: redis:latest
+    command: redis-server --requirepass redis --maxmemory 128mb
+    ports:
+      - 8021:6379
+
+  stock-db-2:
+    image: redis:latest
+    command: redis-server --requirepass redis --maxmemory 128mb
+    ports:
+      - 8022:6379
 
   payment-service:
     build: ./payment
