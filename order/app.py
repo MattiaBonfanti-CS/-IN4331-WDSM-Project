@@ -86,9 +86,15 @@ def create_order(user_id: str):
     :param user_id: The id of the user who creates the order, must be >= 0.
     :return: The order_id if the order has been created and saved successfully, an error otherwise.
     """
-    # TODO: Check user_id exists in payment
-
-    # order_lock = Redlock(key=order_id, masters={db}, auto_release_time=LOCK_AUTORELEASE_TIME) 
+    
+    # Check user_id exists in payment
+    check_user_id = f"{PAYMENT_SERVICE_URL}/find_user/{user_id}"
+    try:
+        response = requests.get(check_user_id)
+        if response.status_code != 200:
+            return Response(response.content, status=response.status_code)
+    except Exception as err:
+        return Response(str(err), status=400)
 
     # Create unique order id
     new_order_id = f"order:{random.getrandbits(ID_BYTES_SIZE)}"
