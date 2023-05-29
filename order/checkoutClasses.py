@@ -18,10 +18,12 @@ class DebitCustomerBalance(Step):
         pay_order = f"{PAYMENT_SERVICE_URL}/pay/{self.user_id}/{self.order_id}/{self.total_cost}"
         response = requests.post(pay_order)
         if response.status_code != 200:
-            return Exception("Failed payment")
+            raise Exception(f"Failed payment for {self.order_id}! " + str(response.text))
+        print("Debit customer execution performed")
         return state
 
-    def compensate(self, order): # state
+    def compensate(self, state): # state
+        print("Debit customer compensation performed")
         return_back_money(self.user_id, self.order_id)
 
 
@@ -32,19 +34,21 @@ class RetrieveStock(Step):
         self.requested_items = requested_items
 
     def execute(self, state):
-        for item_id, amount in self.requested_items:
+        for item_id, amount in self.requested_items.items():
             remove_stock = f"{STOCK_SERVICE_URL}/subtract/{item_id}/{amount}"
             response = requests.post(remove_stock)
 
             if response.status_code != 200:
-                return Exception(f"Failed to add an item {item_id}")
+                self.compensate(state)
+                raise Exception(f"Failed to add an item {item_id}! " + str(response.text))
 
             self.added_items[item_id] = amount
+        print("Retrieve stock execution performed")
         return state
 
-    def compensate(self, order): # state??
+    def compensate(self, state): # state??
+        print("Retrieve stock compensation performed")
         return_back_added_items(self.added_items)
-
 
 class UpdateOrder(Step):
 
@@ -53,10 +57,12 @@ class UpdateOrder(Step):
         self.db = db
 
     def execute(self, state):
+        print("Update order execution performed")
         self.db.hset(self.order_id, "paid", json.dumps(True))
         return state
 
     def compensate(self, state):  # state??
+        print("Update order compensation performed")
         self.db.hset(self.order_id, "paid", json.dumps(False))
 
 
@@ -66,7 +72,7 @@ def return_back_added_items(add_items) -> str:
         try:
             response = requests.post(add_back_stock)
             if response.status_code != 200:
-                return f"Error when returning one of the items {item_id} " + str(response.content)
+                return f"Error when returning one of the items {item_id}! " + str(response.text)
         except Exception as err:
             return "Error when returning items" + str(err)
 
@@ -78,7 +84,7 @@ def return_back_money(user_id, order_id) -> str:
     try:
         response = requests.post(cancel_order)
         if response.status_code != 200:
-            return "Cancellation of payment was not successful because " + str(response.content)
+            return "Cancellation of payment was not successful because " + str(response.text)
     except Exception as err:
         return "Cancellation of payment was not successful " + str(err)
     return "Money were successfully returned!"

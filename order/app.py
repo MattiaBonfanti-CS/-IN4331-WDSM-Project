@@ -374,15 +374,19 @@ def checkout(order_id):
             return Response(f"The order {order_id} is empty!", status=400)
 
         add_items = {}
-
-        run_transaction(
-            steps=[
-                RetrieveStock(order["items"]),
-                DebitCustomerBalance(order["user_id"], order_id, order["total_cost"]),
-                UpdateOrder(order_id, db)
-            ],
-            starting_state={}
-        )
+        try:
+            run_transaction(
+                steps=[
+                    RetrieveStock(order["items"]),
+                    DebitCustomerBalance(order["user_id"], order_id, order["total_cost"]),
+                    UpdateOrder(order_id, db)
+                ],
+                starting_state={}
+            )
+        except Exception as err:
+            # Release the lock
+            order_lock.release()
+            return Response("Checkout was unsuccessful! " + str(err), status=400)
 
         # # Decrease the amount of stock for the items in the order
         # for item_id, amount in order["items"].items():
