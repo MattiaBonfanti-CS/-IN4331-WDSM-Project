@@ -8,6 +8,7 @@ import requests
 import redis
 
 from pottery import Redlock
+from saga import SagaBuilder, SagaError
 
 STOCK_SERVICE_URL = os.environ['STOCK_SERVICE_URL']
 PAYMENT_SERVICE_URL = os.environ['USER_SERVICE_URL']
@@ -15,6 +16,8 @@ PAYMENT_SERVICE_URL = os.environ['USER_SERVICE_URL']
 RANDOM_SEED = 42
 ID_BYTES_SIZE = 32
 LOCK_AUTORELEASE_TIME = 0.1
+
+add_items = {}
 
 # Set random seed to generate unique ids for the items
 random.seed(RANDOM_SEED)
@@ -339,6 +342,38 @@ def return_back_money(user_id, order_id) -> str:
     return "Money were successfully returned!"
 
 
+def rollback_order(order):
+    return_back_added_items(order["items"])
+    return_back_money(order["user_id"], order["order_id"])
+
+
+def decrease_stock(items: dict):
+    global add_items
+    for item_id, amount in items.items():
+        remove_stock = f"{STOCK_SERVICE_URL}/subtract/{item_id}/{amount}"
+        try:
+            response = requests.post(remove_stock)
+            if response.status_code != 200:
+                return Response(str(response.content) + "\nStatus of items " + response_items, status=response.status_code)
+            add_items[item_id] = amount
+        except Exception:
+            return Response(str(err) + "\nStatus of items " + response_items, status=404)
+    if add_items == items:
+        add_items = {}
+
+
+def pay_order(order):
+    pay_order_url = f"{PAYMENT_SERVICE_URL}/pay/{order['user_id']}/{order['order_id']}/{order['total_cost']}"
+    try:
+        response = requests.post(pay_order_url)
+        if response.status_code != 200:
+            # doesn't return the correct error!!! - doesn't propagate the error
+            raise BaseException(str(response.content) + "\nStatus of items " + response.status_code)
+            # return Response(str(response.content) + "\nStatus of items " + response_items, status=response.status_code)
+    except Exception:
+        return Response(str(err) + "\nStatus of items ", status=404)
+
+
 @app.post('/checkout/<order_id>')
 def checkout(order_id):
     """
@@ -372,59 +407,68 @@ def checkout(order_id):
             order_lock.release()
             return Response(f"The order {order_id} is empty!", status=400)
 
-        add_items = {}
-
-        # Decrease the amount of stock for the items in the order
-        for item_id, amount in order["items"].items():
-            remove_stock = f"{STOCK_SERVICE_URL}/subtract/{item_id}/{amount}"
-            try:
-                response = requests.post(remove_stock)
-                if response.status_code != 200:
-                    # Return the added items
-                    response_items = return_back_added_items(add_items)
-                    # Release the lock
-                    order_lock.release()
-                    return Response(str(response.content) + "\nStatus of items " + response_items, status=response.status_code)
-                add_items[item_id] = amount
-            except Exception as err:
-                # Return the added items
-                response_items = return_back_added_items(add_items)
-                # Release the lock
-                order_lock.release()
-                return Response(str(err) + "\nStatus of items " + response_items, status=404)
-
-        # Pay the order only when the items are successfully removed from the stock
-        user_id = order["user_id"]
-        pay_order = f"{PAYMENT_SERVICE_URL}/pay/{user_id}/{order_id}/{order['total_cost']}"
         try:
-            response = requests.post(pay_order)
-            if response.status_code != 200:
-                response_items = return_back_added_items(add_items)
-                # Release the lock
-                order_lock.release()
-                return Response(str(response.content) + "\nStatus of items " + response_items, status=response.status_code)
-        except Exception as err:
-            # Return the added items
-            response_items = return_back_added_items(add_items)
-            # Release the lock
-            order_lock.release()
-            return Response(str(err) + "\nStatus of items " + response_items, status=404)
+            SagaBuilder \
+                .create() \
+                .action(lambda: decrease_stock(order["items"]), lambda: return_back_added_items(add_items)) \
+                .action(lambda: pay_order(order), lambda: return_back_added_items(order["items"])) \
+                .action(lambda: db.hset(order_id, "paid", json.dumps(True)), lambda: rollback_order(order)) \
+                .build() \
+                .execute()
+        except SagaError as e:
+            print(e)
 
-        # Update the order status to paid
-        try:
-            db.hset(order_id, "paid", json.dumps(True))
-        except Exception as err:
-            # Return the money of the user and items
-            response_items = return_back_added_items(add_items)
-            return_money = return_back_money(order["user_id"], order["order_id"])
-            # Release the lock
-            order_lock.release()
-            return Response(str(err) + "\nStatus of payment " + return_money + "\nStatus of items " + response_items, status=400)
+        # # Decrease the amount of stock for the items in the order
+        # for item_id, amount in order["items"].items():
+        #     remove_stock = f"{STOCK_SERVICE_URL}/subtract/{item_id}/{amount}"
+        #     try:
+        #         response = requests.post(remove_stock)
+        #         if response.status_code != 200:
+        #             # Return the added items
+        #             response_items = return_back_added_items(add_items)
+        #             # Release the lock
+        #             order_lock.release()
+        #             return Response(str(response.content) + "\nStatus of items " + response_items, status=response.status_code)
+        #         add_items[item_id] = amount
+        #     except Exception as err:
+        #         # Return the added items
+        #         response_items = return_back_added_items(add_items)
+        #         # Release the lock
+        #         order_lock.release()
+        #         return Response(str(err) + "\nStatus of items " + response_items, status=404)
+        #
+        # # Pay the order only when the items are successfully removed from the stock
+        # user_id = order["user_id"]
+        # pay_order = f"{PAYMENT_SERVICE_URL}/pay/{user_id}/{order_id}/{order['total_cost']}"
+        # try:
+        #     response = requests.post(pay_order)
+        #     if response.status_code != 200:
+        #         response_items = return_back_added_items(add_items)
+        #         # Release the lock
+        #         order_lock.release()
+        #         return Response(str(response.content) + "\nStatus of items " + response_items, status=response.status_code)
+        # except Exception as err:
+        #     # Return the added items
+        #     response_items = return_back_added_items(add_items)
+        #     # Release the lock
+        #     order_lock.release()
+        #     return Response(str(err) + "\nStatus of items " + response_items, status=404)
+
+        # # Update the order status to paid
+        # try:
+        #     db.hset(order_id, "paid", json.dumps(True))
+        # except Exception as err:
+        #     # Return the money of the user and items
+        #     response_items = return_back_added_items(order["items"])
+        #     return_money = return_back_money(order["user_id"], order["order_id"])
+        #     # Release the lock
+        #     order_lock.release()
+        #     return Response(str(err) + "\nStatus of payment " + return_money + "\nStatus of items " + response_items, status=400)
 
         # Release the lock
         order_lock.release()
 
         # Return success response
-        return Response(f"The order {order_id} is paid successfully.", status=200)
+        return Response(f"The order {order_id} is paid successfully. \nAdded items: {add_items}", status=200)
     else:
         return Response(f"The order {order_id} is locked, try later", status=400)
