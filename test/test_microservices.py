@@ -101,12 +101,21 @@ class TestMicroservices(unittest.TestCase):
         add_stock_response = tu.add_stock(item_id2, 1)
         self.assertTrue(tu.status_code_is_success(add_stock_response))
 
+        # add item1
         add_item_response = tu.add_item_to_order(order_id, item_id1)
         self.assertTrue(tu.status_code_is_success(add_item_response))
+
+        # add item2
         add_item_response = tu.add_item_to_order(order_id, item_id2)
         self.assertTrue(tu.status_code_is_success(add_item_response))
-        subtract_stock_response = tu.subtract_stock(item_id2, 1)
-        self.assertTrue(tu.status_code_is_success(subtract_stock_response))
+
+        # remove item2
+        remove_item_response = tu.remove_item_from_order(order_id, item_id2)
+        self.assertTrue(tu.status_code_is_success(remove_item_response))
+
+        # find stock for item2
+        stock_no_subtract: int = tu.find_item(item_id2)['stock']
+        self.assertEqual(stock_no_subtract, 1)
 
         checkout_response = tu.checkout_order(order_id).status_code
         self.assertTrue(tu.status_code_is_failure(checkout_response))
@@ -138,8 +147,15 @@ class TestMicroservices(unittest.TestCase):
         stock_after_subtract: int = tu.find_item(item_id1)['stock']
         self.assertEqual(stock_after_subtract, 14)
 
+        stock_after_subtract: int = tu.find_item(item_id2)['stock']
+        self.assertEqual(stock_after_subtract, 16)
+
         credit: int = tu.find_user(user_id)['credit']
-        self.assertEqual(credit, 5)
+        self.assertEqual(credit, 10)
+
+        # remove order
+        remove_order = tu.remove_order(order_id)
+        self.assertTrue(tu.status_code_is_success(remove_order))
 
 
 if __name__ == '__main__':
