@@ -286,13 +286,14 @@ def remove_item(order_id, item_id):
         find_item = f"{STOCK_SERVICE_URL}/find/{item_id}"
         try:
             response = requests.get(find_item)
-            item = response.json()
             if response.status_code != 200:
                 order_lock.release()
-                return Response(str(response.content), status=response.status_code)
+                return Response(response.content, status=response.status_code)
         except Exception as err:
             order_lock.release()
             return Response(str(err), status=404)
+
+        item = response.json()
 
         # Update the order and the total cost of the order
         try:
