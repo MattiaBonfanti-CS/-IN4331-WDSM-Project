@@ -342,36 +342,60 @@ def return_back_money(user_id, order_id) -> str:
     return "Money were successfully returned!"
 
 
-def rollback_order(order):
-    return_back_added_items(order["items"])
-    return_back_money(order["user_id"], order["order_id"])
-
-
 def decrease_stock(items: dict):
+    """
+    Decrease the amount of stock for the items in the order
+    """
     global add_items
     for item_id, amount in items.items():
         remove_stock = f"{STOCK_SERVICE_URL}/subtract/{item_id}/{amount}"
         try:
             response = requests.post(remove_stock)
             if response.status_code != 200:
-                return Response(str(response.content) + "\nStatus of items " + response_items, status=response.status_code)
+                result = {
+                    "response_content": response.content,
+                    "status_code": response.status_code
+                }
+                raise BaseException(result)
             add_items[item_id] = amount
-        except Exception:
-            return Response(str(err) + "\nStatus of items " + response_items, status=404)
+        except Exception as err:
+            result = {
+                "response_content": err,
+                "status_code": 404
+            }
+            raise BaseException(result)
+    # If successful, nothing to return on compensation when rollback
     if add_items == items:
         add_items = {}
 
 
 def pay_order(order):
+    """
+    Pay the order only when the items are successfully removed from the stock
+    """
     pay_order_url = f"{PAYMENT_SERVICE_URL}/pay/{order['user_id']}/{order['order_id']}/{order['total_cost']}"
     try:
         response = requests.post(pay_order_url)
         if response.status_code != 200:
-            # doesn't return the correct error!!! - doesn't propagate the error
-            raise BaseException(str(response.content) + "\nStatus of items " + response.status_code)
-            # return Response(str(response.content) + "\nStatus of items " + response_items, status=response.status_code)
-    except Exception:
-        return Response(str(err) + "\nStatus of items ", status=404)
+            result = {
+                "response_content": response.content,
+                "status_code": response.status_code
+            }
+            raise BaseException(result)
+    except Exception as err:
+        result = {
+            "response_content": err,
+            "status_code": 404
+        }
+        raise BaseException(result)
+
+
+def rollback_order(order):
+    """
+    Compensation for the order.
+    """
+    return_back_added_items(order["items"])
+    return_back_money(order["user_id"], order["order_id"])
 
 
 @app.post('/checkout/<order_id>')
@@ -407,6 +431,7 @@ def checkout(order_id):
             order_lock.release()
             return Response(f"The order {order_id} is empty!", status=400)
 
+        # Apply saga transaction manager
         try:
             SagaBuilder \
                 .create() \
@@ -415,55 +440,8 @@ def checkout(order_id):
                 .action(lambda: db.hset(order_id, "paid", json.dumps(True)), lambda: rollback_order(order)) \
                 .build() \
                 .execute()
-        except SagaError as e:
-            print(e)
-
-        # # Decrease the amount of stock for the items in the order
-        # for item_id, amount in order["items"].items():
-        #     remove_stock = f"{STOCK_SERVICE_URL}/subtract/{item_id}/{amount}"
-        #     try:
-        #         response = requests.post(remove_stock)
-        #         if response.status_code != 200:
-        #             # Return the added items
-        #             response_items = return_back_added_items(add_items)
-        #             # Release the lock
-        #             order_lock.release()
-        #             return Response(str(response.content) + "\nStatus of items " + response_items, status=response.status_code)
-        #         add_items[item_id] = amount
-        #     except Exception as err:
-        #         # Return the added items
-        #         response_items = return_back_added_items(add_items)
-        #         # Release the lock
-        #         order_lock.release()
-        #         return Response(str(err) + "\nStatus of items " + response_items, status=404)
-        #
-        # # Pay the order only when the items are successfully removed from the stock
-        # user_id = order["user_id"]
-        # pay_order = f"{PAYMENT_SERVICE_URL}/pay/{user_id}/{order_id}/{order['total_cost']}"
-        # try:
-        #     response = requests.post(pay_order)
-        #     if response.status_code != 200:
-        #         response_items = return_back_added_items(add_items)
-        #         # Release the lock
-        #         order_lock.release()
-        #         return Response(str(response.content) + "\nStatus of items " + response_items, status=response.status_code)
-        # except Exception as err:
-        #     # Return the added items
-        #     response_items = return_back_added_items(add_items)
-        #     # Release the lock
-        #     order_lock.release()
-        #     return Response(str(err) + "\nStatus of items " + response_items, status=404)
-
-        # # Update the order status to paid
-        # try:
-        #     db.hset(order_id, "paid", json.dumps(True))
-        # except Exception as err:
-        #     # Return the money of the user and items
-        #     response_items = return_back_added_items(order["items"])
-        #     return_money = return_back_money(order["user_id"], order["order_id"])
-        #     # Release the lock
-        #     order_lock.release()
-        #     return Response(str(err) + "\nStatus of payment " + return_money + "\nStatus of items " + response_items, status=400)
+        except SagaError as response:
+            return Response(str(response), status=400)
 
         # Release the lock
         order_lock.release()

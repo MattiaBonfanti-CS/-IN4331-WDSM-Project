@@ -109,7 +109,6 @@ class TestMicroservices(unittest.TestCase):
         self.assertTrue(tu.status_code_is_success(subtract_stock_response))
 
         checkout_response = tu.checkout_order(order_id).status_code
-        print(checkout_response)
         self.assertTrue(tu.status_code_is_failure(checkout_response))
 
         stock_after_subtract: int = tu.find_item(item_id1)['stock']
