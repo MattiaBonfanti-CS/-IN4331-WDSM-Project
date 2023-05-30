@@ -15,7 +15,9 @@ services:
       - stock-db-1
       - stock-db-2
       - payment-service
-      - payment-db
+      - payment-db-0
+      - payment-db-1
+      - payment-db-2
 
   order-service:
     build: ./order
