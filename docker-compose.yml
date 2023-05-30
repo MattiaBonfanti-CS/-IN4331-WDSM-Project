@@ -67,8 +67,20 @@ services:
     env_file:
       - env/payment_redis.env
 
-  payment-db:
+  payment-db-0:
     image: redis:latest
     command: redis-server --requirepass redis --maxmemory 512mb
     ports:
-      - 8003:6379
+      - 8030:6379
+
+  payment-db-1:
+    image: redis:latest
+    command: redis-server --requirepass redis --maxmemory 512mb
+    ports:
+      - 8031:6379
+
+  payment-db-2:
+    image: redis:latest
+    command: redis-server --requirepass redis --maxmemory 512mb
+    ports:
+      - 8032:6379
