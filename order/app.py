@@ -21,18 +21,36 @@ random.seed(RANDOM_SEED)
 
 app = Flask("order-service")
 
-db: redis.Redis = redis.Redis(host=os.environ['REDIS_HOST'],
-                              port=int(os.environ['REDIS_PORT']),
-                              password=os.environ['REDIS_PASSWORD'],
-                              db=int(os.environ['REDIS_DB']))
+# Connect to DB
+db_0: redis.Redis = redis.Redis(host=os.environ['REDIS_HOST_0'],
+                                port=int(os.environ['REDIS_PORT']),
+                                password=os.environ['REDIS_PASSWORD'],
+                                db=int(os.environ['REDIS_DB']))
+
+db_1: redis.Redis = redis.Redis(host=os.environ['REDIS_HOST_1'],
+                                port=int(os.environ['REDIS_PORT']),
+                                password=os.environ['REDIS_PASSWORD'],
+                                db=int(os.environ['REDIS_DB']))
+
+db_2: redis.Redis = redis.Redis(host=os.environ['REDIS_HOST_2'],
+                                port=int(os.environ['REDIS_PORT']),
+                                password=os.environ['REDIS_PASSWORD'],
+                                db=int(os.environ['REDIS_DB']))
+
+db_shards = [db_0, db_1, db_2]
+MODULO_HASH = len(db_shards)
+
 
 
 def close_db_connection():
-    db.close()
+    """
+    Close the DB connection
+    """
+    for db in db_shards:
+        db.close()
 
-
+# Run close_db_connection function when service ends
 atexit.register(close_db_connection)
-
 
 def convert_order(order):
     """
@@ -92,12 +110,15 @@ def create_order(user_id: str):
 
     # Create unique order id
     new_order_id = f"order:{random.getrandbits(ID_BYTES_SIZE)}"
+    db = get_db(new_order_id)
     while db.hget(new_order_id, "order_id"):
         new_order_id = f"order:{random.getrandbits(ID_BYTES_SIZE)}"
+        db = get_db(new_order_id)
 
     # Create a new order
     new_order = Order(order_id=new_order_id, user_id=user_id)
 
+    
     # Store to DB
     try:
         db.hset(new_order.order_id, mapping=new_order.to_dict())
@@ -120,6 +141,7 @@ def remove_order(order_id):
     :return: Empty successful response if successful, otherwise error.
     """
     # Lock the order
+    db = get_db(order_id)
     order_lock = Redlock(key=order_id, masters={db}, auto_release_time=LOCK_AUTORELEASE_TIME)
 
     if order_lock.acquire():
@@ -146,7 +168,7 @@ def remove_order(order_id):
 
 @app.get('/find/<order_id>')
 def find_order(order_id):
-
+    db = get_db(order_id)
     # Lock the order
     order_lock = Redlock(key=order_id, masters={db}, auto_release_time=LOCK_AUTORELEASE_TIME)
 
@@ -179,6 +201,7 @@ def add_item(order_id, item_id):
     :param item_id: The id of the item to be added
     :return: A successful response if the operation is successful, an error otherwise.
     """
+    db = get_db(order_id)
     # Lock the order
     order_lock = Redlock(key=order_id, masters={db}, auto_release_time=LOCK_AUTORELEASE_TIME)
     if order_lock.acquire():
@@ -250,6 +273,7 @@ def remove_item(order_id, item_id):
     :param item_id: The item to be removed.
     :return: A success response if the operation is successful, an error otherwise.
     """
+    db = get_db(order_id)
     # Lock the order
     order_lock = Redlock(key=order_id, masters={db}, auto_release_time=LOCK_AUTORELEASE_TIME)
 
@@ -347,6 +371,7 @@ def checkout(order_id):
     :param order_id: The id of the order to be checked out.
     :return: The status of the order - success/failure or an error, otherwise.
     """
+    db = get_db(order_id)
     # Lock the order
     order_lock = Redlock(key=order_id, masters={db}, auto_release_time=LOCK_AUTORELEASE_TIME)
 
