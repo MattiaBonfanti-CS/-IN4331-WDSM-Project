@@ -45,8 +45,12 @@ spec:
               value: "http://user-service:5000"
             - name: STOCK_SERVICE_URL
               value: "http://stock-service:5000"
-            - name: REDIS_HOST
-              value: order-db-redis-master
+            - name: REDIS_HOST_0
+              value: order-db-0-redis-master
+            - name: REDIS_HOST_1
+              value: order-db-1-redis-master
+            - name: REDIS_HOST_2
+              value: order-db-2-redis-master
             - name: REDIS_PORT
               value: '6379'
             - name: REDIS_PASSWORD

@@ -41,8 +41,12 @@ spec:
           ports:
             - containerPort: 5000
           env:
-            - name: REDIS_HOST
-              value: payment-db-redis-master
+            - name: REDIS_HOST_0
+              value: payment-db-0-redis-master
+            - name: REDIS_HOST_1
+              value: payment-db-1-redis-master
+            - name: REDIS_HOST_2
+              value: payment-db-2-redis-master
             - name: REDIS_PORT
               value: '6379'
             - name: REDIS_PASSWORD
