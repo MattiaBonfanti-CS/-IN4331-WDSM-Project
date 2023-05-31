@@ -40,14 +40,24 @@ db_2: redis.Redis = redis.Redis(host=os.environ['REDIS_HOST_2'],
 db_shards = [db_0, db_1, db_2]
 MODULO_HASH = len(db_shards)
 
-
-
 def close_db_connection():
     """
     Close the DB connection
     """
     for db in db_shards:
         db.close()
+
+# Retrieve DB from item_id
+def get_db(item_id: str):
+    """
+    Retrieve the DB where the item_id is stored.
+    :param item_id: The item id.
+    :return: The db connection.
+    """
+    item_id_bytes = int(item_id.split(":")[1])
+    db_idx = item_id_bytes % MODULO_HASH
+
+    return db_shards[db_idx]
 
 # Run close_db_connection function when service ends
 atexit.register(close_db_connection)
