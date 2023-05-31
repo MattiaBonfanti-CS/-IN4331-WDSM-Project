@@ -5,7 +5,9 @@ minikube image rm order:latest stock:latest user:latest
 minikube image load order:latest stock:latest user:latest
 
 echo "Installing Redis Helm Charts for the order, payment and stock databases..."
-helm install -f helm-config/redis-helm-values.yaml order-db bitnami/redis --set master.service.nodePorts.redis=30000 --set replica.service.nodePorts.redis=30001
+helm install -f helm-config/redis-helm-values.yaml order-db-0 bitnami/redis --set master.service.nodePorts.redis=30000 --set replica.service.nodePorts.redis=30001
+helm install -f helm-config/redis-helm-values.yaml order-db-1 bitnami/redis --set master.service.nodePorts.redis=30010 --set replica.service.nodePorts.redis=30011
+helm install -f helm-config/redis-helm-values.yaml order-db-2 bitnami/redis --set master.service.nodePorts.redis=30020 --set replica.service.nodePorts.redis=30021
 
 helm install -f helm-config/redis-helm-values.yaml payment-db-0 bitnami/redis --set master.service.nodePorts.redis=30100 --set replica.service.nodePorts.redis=30101
 helm install -f helm-config/redis-helm-values.yaml payment-db-1 bitnami/redis --set master.service.nodePorts.redis=30110 --set replica.service.nodePorts.redis=30111

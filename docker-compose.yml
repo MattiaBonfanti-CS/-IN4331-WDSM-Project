@@ -9,7 +9,9 @@ services:
       - "8000:80"
     depends_on:
       - order-service
-      - order-db
+      - order-db-0
+      - order-db-1
+      - order-db-2
       - stock-service
       - stock-db-0
       - stock-db-1
@@ -29,11 +31,23 @@ services:
     env_file:
       - env/order_redis.env
 
-  order-db:
+  order-db-0:
     image: redis:latest
-    command: redis-server --requirepass redis --maxmemory 512mb
+    command: redis-server --requirepass redis --maxmemory 128mb
     ports:
-      - 8001:6379
+      - 8010:6379
+
+  order-db-1:
+    image: redis:latest
+    command: redis-server --requirepass redis --maxmemory 128mb
+    ports:
+      - 8011:6379
+  
+  order-db-2:
+    image: redis:latest
+    command: redis-server --requirepass redis --maxmemory 128mb
+    ports:
+      - 8012:6379
 
   stock-service:
     build: ./stock
