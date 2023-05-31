@@ -14,7 +14,7 @@ PAYMENT_SERVICE_URL = os.environ['USER_SERVICE_URL']
 
 RANDOM_SEED = 42
 ID_BYTES_SIZE = 32
-LOCK_AUTORELEASE_TIME = 0.1
+LOCK_AUTORELEASE_TIME = 120
 
 # Set random seed to generate unique ids for the items
 random.seed(RANDOM_SEED)
