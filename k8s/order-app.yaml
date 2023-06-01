@@ -31,13 +31,13 @@ spec:
           imagePullPolicy: Never
           resources:
             limits:
-              memory: "256Mi"
-              cpu: "200m"
+              memory: "128Mi"
+              cpu: "1"
             requests:
               memory: "128Mi"
-              cpu: "150m"
+              cpu: "1"
           command: ["gunicorn"]
-          args: ["-b", "0.0.0.0:5000", "app:app"]
+          args: ["-b", "0.0.0.0:5000", "app:app", "-w", "1", "--timeout", "120"]
           ports:
             - containerPort: 5000
           env:
@@ -45,8 +45,12 @@ spec:
               value: "http://user-service:5000"
             - name: STOCK_SERVICE_URL
               value: "http://stock-service:5000"
-            - name: REDIS_HOST
-              value: order-db-redis-master
+            - name: REDIS_HOST_0
+              value: order-db-0-redis-master
+            - name: REDIS_HOST_1
+              value: order-db-1-redis-master
+            - name: REDIS_HOST_2
+              value: order-db-2-redis-master
             - name: REDIS_PORT
               value: '6379'
             - name: REDIS_PASSWORD
@@ -63,6 +67,6 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: order-deployment
-  minReplicas: 4
-  maxReplicas: 8
-  targetCPUUtilizationPercentage: 45
+  minReplicas: 1
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 60
