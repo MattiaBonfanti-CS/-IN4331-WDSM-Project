@@ -9,27 +9,57 @@ from pottery import Redlock
 
 RANDOM_SEED = 444
 ID_BYTES_SIZE = 32
-LOCK_AUTORELEASE_TIME = 0.1
+LOCK_AUTORELEASE_TIME = 120
 
 # Set random seed to generate unique ids for the items
 random.seed(RANDOM_SEED)
 
 app = Flask("payment-service")
 
-db: redis.Redis = redis.Redis(host=os.environ['REDIS_HOST'],
-                              port=int(os.environ['REDIS_PORT']),
-                              password=os.environ['REDIS_PASSWORD'],
-                              db=int(os.environ['REDIS_DB']))
+# Connect to DB
+db_0: redis.Redis = redis.Redis(host=os.environ['REDIS_HOST_0'],
+                                port=int(os.environ['REDIS_PORT']),
+                                password=os.environ['REDIS_PASSWORD'],
+                                db=int(os.environ['REDIS_DB']))
+
+db_1: redis.Redis = redis.Redis(host=os.environ['REDIS_HOST_1'],
+                                port=int(os.environ['REDIS_PORT']),
+                                password=os.environ['REDIS_PASSWORD'],
+                                db=int(os.environ['REDIS_DB']))
+
+db_2: redis.Redis = redis.Redis(host=os.environ['REDIS_HOST_2'],
+                                port=int(os.environ['REDIS_PORT']),
+                                password=os.environ['REDIS_PASSWORD'],
+                                db=int(os.environ['REDIS_DB']))
+
+db_shards = [db_0, db_1, db_2]
+MODULO_HASH = len(db_shards)
 
 
 def close_db_connection():
     """
     Close the DB connection
     """
-    db.close()
+    for db in db_shards:
+        db.close()
+
 
 # Run close_db_connection function when service ends
 atexit.register(close_db_connection)
+
+
+# Retrieve DB from item_id
+def get_db(item_id: str):
+    """
+    Retrieve the DB where the item_id is stored.
+    :param item_id: The item id.
+    :return: The db connection.
+    """
+    item_id_bytes = int(item_id.split(":")[1])
+    db_idx = item_id_bytes % MODULO_HASH
+
+    return db_shards[db_idx]
+
 
 class User:
     def __init__(self, user_id: str):
@@ -61,8 +91,10 @@ class Payment:
 def create_user():
     # Create new user id
     new_user_id = f"user:{random.getrandbits(ID_BYTES_SIZE)}"
+    db = get_db(new_user_id)
     while db.hget(new_user_id, "user_id"):
         new_user_id = f"user:{random.getrandbits(ID_BYTES_SIZE)}"
+        db = get_db(new_user_id)
 
     new_user = User(user_id=new_user_id)
 
@@ -80,6 +112,8 @@ def create_user():
 
 @app.get('/find_user/<user_id>')
 def find_user(user_id: str):
+    db = get_db(user_id)
+
     # Lock the user
     user_lock = Redlock(key=user_id, masters={db}, auto_release_time=LOCK_AUTORELEASE_TIME)
 
@@ -98,7 +132,7 @@ def find_user(user_id: str):
         user_lock.release()
         return Response(json.dumps(return_user), mimetype="application/json", status=200)
     else:
-         return Response(f"The user {user_id} is locked, try later", status=400)
+        return Response(f"The user {user_id} is locked, try later", status=400)
 
 
 @app.post('/add_funds/<user_id>/<amount>')
@@ -106,6 +140,8 @@ def add_credit(user_id: str, amount: int):
     amount = int(amount)
     if amount <= 0:
         return Response("The amount must be > 0!", status=400)
+    
+    db = get_db(user_id)
 
     user_lock = Redlock(key=user_id, masters={db}, auto_release_time=LOCK_AUTORELEASE_TIME)
     if user_lock.acquire():
@@ -136,6 +172,8 @@ def remove_credit(user_id: str, order_id: str, amount: int):
     amount = int(amount)
     if amount <= 0:
         return Response("The amount must be > 0!", status=400)
+    
+    db = get_db(user_id)
 
     user_lock = Redlock(key=user_id, masters={db}, auto_release_time=LOCK_AUTORELEASE_TIME)
     order_lock = Redlock(key=order_id, masters={db}, auto_release_time=LOCK_AUTORELEASE_TIME)
@@ -196,13 +234,13 @@ def remove_credit(user_id: str, order_id: str, amount: int):
         order_lock.release()
         return Response(f"The payment of the order {order_id} is paid", status=200)
     else:
-        user_lock.release()
-        order_lock.release()
         return Response(f"Not able to acquire locks for {order_id} and/or {user_id}, try later", status=400)
 
 
 @app.post('/cancel/<user_id>/<order_id>')
 def cancel_payment(user_id: str, order_id: str):
+    db = get_db(user_id)
+
     user_lock = Redlock(key=user_id, masters={db}, auto_release_time=LOCK_AUTORELEASE_TIME)
     order_lock = Redlock(key=order_id, masters={db}, auto_release_time=LOCK_AUTORELEASE_TIME)
 
@@ -247,13 +285,13 @@ def cancel_payment(user_id: str, order_id: str):
         order_lock.release()
         return Response(f"The payment of the order {order_id} has been cancelled and the current credit for user {user_id} is {new_credit}", status=200)
     else:
-        user_lock.release()
-        order_lock.release()
         return Response(f"Not able to acquire locks for {order_id} and/or {user_id}, try later", status=400)
 
 
 @app.post('/status/<user_id>/<order_id>')
 def payment_status(user_id: str, order_id: str):
+    db = get_db(user_id)
+    
     user_lock = Redlock(key=user_id, masters={db}, auto_release_time=LOCK_AUTORELEASE_TIME)
     order_lock = Redlock(key=order_id, masters={db}, auto_release_time=LOCK_AUTORELEASE_TIME)
 
@@ -282,6 +320,4 @@ def payment_status(user_id: str, order_id: str):
             "paid": order_payment["status"]
         }
     else:
-        user_lock.release()
-        order_lock.release()
         return Response(f"Not able to acquire locks for {order_id} and/or {user_id}, try later", status=400)

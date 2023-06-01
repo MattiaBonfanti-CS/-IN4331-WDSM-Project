@@ -9,7 +9,7 @@ from pottery import Redlock
 
 RANDOM_SEED = 444
 ID_BYTES_SIZE = 32
-LOCK_AUTORELEASE_TIME = 0.1
+LOCK_AUTORELEASE_TIME = 120
 
 # Set random seed to generate unique ids for the items
 random.seed(RANDOM_SEED)
@@ -18,21 +18,49 @@ random.seed(RANDOM_SEED)
 app = Flask("stock-service")
 
 # Connect to DB
-db: redis.Redis = redis.Redis(host=os.environ['REDIS_HOST'],
-                              port=int(os.environ['REDIS_PORT']),
-                              password=os.environ['REDIS_PASSWORD'],
-                              db=int(os.environ['REDIS_DB']))
+db_0: redis.Redis = redis.Redis(host=os.environ['REDIS_HOST_0'],
+                                port=int(os.environ['REDIS_PORT']),
+                                password=os.environ['REDIS_PASSWORD'],
+                                db=int(os.environ['REDIS_DB']))
+
+db_1: redis.Redis = redis.Redis(host=os.environ['REDIS_HOST_1'],
+                                port=int(os.environ['REDIS_PORT']),
+                                password=os.environ['REDIS_PASSWORD'],
+                                db=int(os.environ['REDIS_DB']))
+
+db_2: redis.Redis = redis.Redis(host=os.environ['REDIS_HOST_2'],
+                                port=int(os.environ['REDIS_PORT']),
+                                password=os.environ['REDIS_PASSWORD'],
+                                db=int(os.environ['REDIS_DB']))
+
+db_shards = [db_0, db_1, db_2]
+MODULO_HASH = len(db_shards)
 
 
 def close_db_connection():
     """
     Close the DB connection
     """
-    db.close()
+    for db in db_shards:
+        db.close()
 
 
 # Run close_db_connection function when service ends
 atexit.register(close_db_connection)
+
+
+# Retrieve DB from item_id
+def get_db(item_id: str):
+    """
+    Retrieve the DB where the item_id is stored.
+
+    :param item_id: The item id.
+    :return: The db connection.
+    """
+    item_id_bytes = int(item_id.split(":")[1])
+    db_idx = item_id_bytes % MODULO_HASH
+
+    return db_shards[db_idx]
 
 
 # Define models
@@ -72,10 +100,13 @@ def create_item(price: int):
 
     # Create unique item id
     new_item_id = f"item:{random.getrandbits(ID_BYTES_SIZE)}"
+    db = get_db(new_item_id)
     while db.hget(new_item_id, "item_id"):
         new_item_id = f"item:{random.getrandbits(ID_BYTES_SIZE)}"
+        db = get_db(new_item_id)
 
     # Create new item
+    db = get_db(new_item_id)
     new_item = Item(item_id=new_item_id, price=price)
 
     # Store to DB
@@ -100,6 +131,7 @@ def find_item(item_id: str):
     :param item_id: The item unique id.
     :return: The retrieved item. An error otherwise.
     """
+    db = get_db(item_id)
     # Lock the item
     item_lock = Redlock(key=item_id, masters={db}, auto_release_time=LOCK_AUTORELEASE_TIME)
     if item_lock.acquire():
@@ -137,6 +169,8 @@ def add_stock(item_id: str, amount: int):
     if amount <= 0:
         return Response("The amount must be > 0!", status=400)
 
+    db = get_db(item_id)
+
     # Lock the item
     item_lock = Redlock(key=item_id, masters={db}, auto_release_time=LOCK_AUTORELEASE_TIME)
     if item_lock.acquire():
@@ -173,6 +207,8 @@ def remove_stock(item_id: str, amount: int):
     amount = int(amount)
     if amount <= 0:
         return Response("The amount must be > 0!", status=400)
+
+    db = get_db(item_id)
 
     # Lock the item
     item_lock = Redlock(key=item_id, masters={db}, auto_release_time=LOCK_AUTORELEASE_TIME)

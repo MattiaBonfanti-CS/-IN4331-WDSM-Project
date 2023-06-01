@@ -7,11 +7,11 @@ master:
     size: 256Mi
   resources:
     limits:
-      memory: 512Mi
-      cpu: 500m
+      memory: 128Mi
+      cpu: 200m
     requests:
-      memory: 512Mi
-      cpu: 500m
+      memory: 128Mi
+      cpu: 200m
 replica:
   replicaCount: 1
   service:
@@ -20,8 +20,8 @@ replica:
     size: 256Mi
   resources:
     limits:
-      memory: 512Mi
-      cpu: 500m
+      memory: 128Mi
+      cpu: 200m
     requests:
-      memory: 512Mi
-      cpu: 500m
+      memory: 128Mi
+      cpu: 200m
