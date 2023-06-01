@@ -22,7 +22,7 @@ class DebitCustomerBalance(Step):
         print("Debit customer execution performed")
         return state
 
-    def compensate(self, state): # state
+    def compensate(self, state):
         print("Debit customer compensation performed")
         return_back_money(self.user_id, self.order_id)
 
@@ -46,9 +46,10 @@ class RetrieveStock(Step):
         print("Retrieve stock execution performed")
         return state
 
-    def compensate(self, state): # state??
+    def compensate(self, state):
         print("Retrieve stock compensation performed")
         return_back_added_items(self.added_items)
+
 
 class UpdateOrder(Step):
 
@@ -61,7 +62,7 @@ class UpdateOrder(Step):
         self.db.hset(self.order_id, "paid", json.dumps(True))
         return state
 
-    def compensate(self, state):  # state??
+    def compensate(self, state):
         print("Update order compensation performed")
         self.db.hset(self.order_id, "paid", json.dumps(False))
 
@@ -88,4 +89,3 @@ def return_back_money(user_id, order_id) -> str:
     except Exception as err:
         return "Cancellation of payment was not successful " + str(err)
     return "Money were successfully returned!"
-
