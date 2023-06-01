@@ -43,12 +43,14 @@ db_2: redis.Redis = redis.Redis(host=os.environ['REDIS_HOST_2'],
 db_shards = [db_0, db_1, db_2]
 MODULO_HASH = len(db_shards)
 
+
 def close_db_connection():
     """
     Close the DB connection
     """
     for db in db_shards:
         db.close()
+
 
 # Retrieve DB from item_id
 def get_db(item_id: str):
@@ -62,8 +64,10 @@ def get_db(item_id: str):
 
     return db_shards[db_idx]
 
+
 # Run close_db_connection function when service ends
 atexit.register(close_db_connection)
+
 
 def convert_order(order):
     """
@@ -137,7 +141,6 @@ def create_order(user_id: str):
     # Create a new order
     new_order = Order(order_id=new_order_id, user_id=user_id)
 
-    
     # Store to DB
     try:
         db.hset(new_order.order_id, mapping=new_order.to_dict())
