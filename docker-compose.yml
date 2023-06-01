@@ -42,7 +42,7 @@ services:
     command: redis-server --requirepass redis --maxmemory 128mb
     ports:
       - 8011:6379
-  
+
   order-db-2:
     image: redis:latest
     command: redis-server --requirepass redis --maxmemory 128mb
@@ -83,18 +83,18 @@ services:
 
   payment-db-0:
     image: redis:latest
-    command: redis-server --requirepass redis --maxmemory 512mb
+    command: redis-server --requirepass redis --maxmemory 128mb
     ports:
       - 8030:6379
 
   payment-db-1:
     image: redis:latest
-    command: redis-server --requirepass redis --maxmemory 512mb
+    command: redis-server --requirepass redis --maxmemory 128mb
     ports:
       - 8031:6379
 
   payment-db-2:
     image: redis:latest
-    command: redis-server --requirepass redis --maxmemory 512mb
+    command: redis-server --requirepass redis --maxmemory 128mb
     ports:
       - 8032:6379
