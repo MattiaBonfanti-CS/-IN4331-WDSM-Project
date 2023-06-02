@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
 
+echo "Refreshing Docker images..."
+docker rmi order:latest user:latest stock:latest
+docker build -t order:latest -f order/Dockerfile .
+docker build -t user:latest -f payment/Dockerfile .
+docker build -t stock:latest -f stock/Dockerfile .
+
 echo "Refreshing minikube images..."
 minikube image rm order:latest stock:latest user:latest
 minikube image load order:latest stock:latest user:latest
