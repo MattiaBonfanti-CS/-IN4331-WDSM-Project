@@ -56,7 +56,7 @@ This setup is for local k8s testing to see if your k8s config works before deplo
 - MiniKube must be started with at least 8GB of memory and 8 CPUs capacity:
 ```shell script
 # To remove an existing cluster
-minikube unistall
+minikube delete
 
 # To start the new cluster with the necessary resources
 minikube start --memory 8192 --cpus 8

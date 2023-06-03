@@ -2,9 +2,18 @@
 
 echo "Refreshing Docker images..."
 docker rmi order:latest user:latest stock:latest
-docker build -t order:latest -f order/Dockerfile .
-docker build -t user:latest -f payment/Dockerfile .
-docker build -t stock:latest -f stock/Dockerfile .
+
+cd order
+docker build -t order:latest .
+cd ../
+
+cd payment
+docker build -t user:latest .
+cd ../
+
+cd stock
+docker build -t stock:latest .
+cd ../
 
 echo "Installing Redis Helm Charts for the order, payment and stock databases..."
 helm install -f helm-config/redis-helm-values.yaml order-db-0 bitnami/redis
