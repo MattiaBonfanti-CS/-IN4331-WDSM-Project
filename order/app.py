@@ -266,7 +266,7 @@ def add_item(order_id, item_id):
         try:
             serialized_transaction = db.pipeline()
             serialized_transaction.hset(order_id, "items", json.dumps(added_items))  # overwrites the previous entry
-            serialized_transaction.hincrbyfloat(order_id, "total_cost", 1 * item_to_be_added["price"])  # increase the total cost
+            serialized_transaction.hincrby(order_id, "total_cost", 1 * item_to_be_added["price"])  # increase the total cost
             results = serialized_transaction.execute()
         except Exception as err:
             order_lock.release()
