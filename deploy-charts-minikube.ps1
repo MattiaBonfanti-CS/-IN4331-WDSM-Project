@@ -1,3 +1,19 @@
+
+echo "Refreshing Docker images..."
+docker rmi order:latest user:latest stock:latest
+
+cd order
+docker build -t order:latest .
+cd ../
+
+cd payment
+docker build -t user:latest .
+cd ../
+
+cd stock
+docker build -t stock:latest .
+cd ../
+
 echo "Refreshing minikube images..."
 minikube image rm order:latest stock:latest user:latest
 minikube image load order:latest stock:latest user:latest
