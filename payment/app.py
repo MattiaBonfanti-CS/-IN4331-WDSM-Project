@@ -35,6 +35,7 @@ db_2: redis.Redis = redis.Redis(host=os.environ['REDIS_HOST_2'],
 db_shards = [db_0, db_1, db_2]
 MODULO_HASH = len(db_shards)
 
+
 def close_db_connection():
     """
     Close the DB connection
@@ -42,8 +43,10 @@ def close_db_connection():
     for db in db_shards:
         db.close()
 
+
 # Run close_db_connection function when service ends
 atexit.register(close_db_connection)
+
 
 # Retrieve DB from item_id
 def get_db(item_id: str):
@@ -56,6 +59,7 @@ def get_db(item_id: str):
     db_idx = item_id_bytes % MODULO_HASH
 
     return db_shards[db_idx]
+
 
 class User:
     def __init__(self, user_id: str):
@@ -128,7 +132,7 @@ def find_user(user_id: str):
         user_lock.release()
         return Response(json.dumps(return_user), mimetype="application/json", status=200)
     else:
-         return Response(f"The user {user_id} is locked, try later", status=400)
+        return Response(f"The user {user_id} is locked, try later", status=400)
 
 
 @app.post('/add_funds/<user_id>/<amount>')
@@ -230,8 +234,6 @@ def remove_credit(user_id: str, order_id: str, amount: int):
         order_lock.release()
         return Response(f"The payment of the order {order_id} is paid", status=200)
     else:
-        user_lock.release()
-        order_lock.release()
         return Response(f"Not able to acquire locks for {order_id} and/or {user_id}, try later", status=400)
 
 
@@ -283,8 +285,6 @@ def cancel_payment(user_id: str, order_id: str):
         order_lock.release()
         return Response(f"The payment of the order {order_id} has been cancelled and the current credit for user {user_id} is {new_credit}", status=200)
     else:
-        user_lock.release()
-        order_lock.release()
         return Response(f"Not able to acquire locks for {order_id} and/or {user_id}, try later", status=400)
 
 
@@ -320,6 +320,4 @@ def payment_status(user_id: str, order_id: str):
             "paid": order_payment["status"]
         }
     else:
-        user_lock.release()
-        order_lock.release()
         return Response(f"Not able to acquire locks for {order_id} and/or {user_id}, try later", status=400)
