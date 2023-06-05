@@ -55,7 +55,7 @@ def create_order(session):
         try:
             session.order_id = response.json()['order_id']
         except json.JSONDecodeError:
-            response.failure("SERVER ERROR")
+            response.failure(f"SERVER ERROR - {response.status_code}: {response.text}")
 
 
 def add_item_to_order(session, item_idx: int):
