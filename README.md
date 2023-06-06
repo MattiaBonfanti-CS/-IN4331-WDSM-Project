@@ -133,6 +133,8 @@ helm repo add metrics-server https://kubernetes-sigs.github.io/metrics-server
 helm repo update
 ```
 
+Next, follow the instructions for the deployment depending on your system.
+
 #### Linux and MacOs deployment:
 
 Then deploy the database chart as well as the services pods using:
