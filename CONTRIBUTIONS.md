@@ -8,7 +8,10 @@ Our contributions for the project so far are:
 
 #### Mattia
 
-Worked on the stock microservice, database sharding, serialized transations and locking implementation stock service, kubernetes setup, tested the system and setup additional docker-compose and kubernetes features. 
+Worked on the stock microservice and implemented locking and serialized transactions.
+Implemented Database sharding in the code and in the architecture. 
+Setup kubernetes and added deployment scripts. 
+Tested the system using the provided benchmark tools and setup additional docker-compose and kubernetes features. 
 
 #### Violeta
 
@@ -25,11 +28,11 @@ Implement distributed transactions with `talepy` library for the checkout operat
 
 #### Taichi
 
-Worked on implementation of the payment service, database sharding, serialized transations and locking implementation payment service.
+Worked on implementation of the payment service, database sharding, serialized transactions and locking implementation payment service.
 
 #### Dyon
 
-Worked on implementation of the payment service, database sharding, serialized transations and locking implementation payment service.
+Worked on implementation of the payment service, database sharding, serialized transactions and locking implementation payment service.
 
 ### Issues
 
