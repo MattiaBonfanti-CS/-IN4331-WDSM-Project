@@ -111,6 +111,10 @@ helm repo add bitnami https://charts.bitnami.com/bitnami
 helm repo update
 ```
 
+Next, follow the instructions for the deployment depending on your system. 
+
+#### Linux and MacOs deployment:
+
 Then deploy the database chart as well as the services pods using:
 
 ```shell script
@@ -122,6 +126,22 @@ To remove the deployments:
 ```shell script
 ./remove-charts-minikube.sh
 ```
+
+#### For Windows deployment:
+
+Then deploy the database chart as well as the services pods using:
+
+```shell script
+./deploy-charts-minikube.ps1
+```
+
+To remove the deployments:
+
+```shell script
+./remove-charts-minikube.ps1
+```
+
+#### For all OS:
 
 To stop the cluster:
 
@@ -151,6 +171,10 @@ helm repo add metrics-server https://kubernetes-sigs.github.io/metrics-server
 helm repo update
 ```
 
+Next, follow the instructions for the deployment depending on your system.
+
+#### Linux and MacOs deployment:
+
 Then deploy the database chart as well as the services pods using:
 
 ```shell script
@@ -162,6 +186,21 @@ To remove the deployments:
 ```shell script
 ./remove-charts-cluster.sh
 ```
+
+#### For Windows deployment:
+
+Then deploy the database chart as well as the services pods using:
+
+```shell script
+./deploy-charts-minikube.ps1
+```
+
+To remove the deployments:
+
+```shell script
+./remove-charts-minikube.ps1
+```
+
 
 ## Test
 
