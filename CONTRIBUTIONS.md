@@ -2,13 +2,13 @@
 
 https://github.com/MattiaBonfanti-CS/IN4331-WDSM-Project
 
-## Midterm - 6 June 2023
+## End term - 6 June 2023
 
 Our contributions for the project so far are:
 
 #### Mattia
 
-Worked on the stock microservice, tested the system and setup additional docker-compose features. 
+Worked on the stock microservice, database sharding, tested the system and setup additional docker-compose features. 
 
 #### Violeta
 
@@ -22,11 +22,11 @@ Worked on implementation of the order service and tested the correct functioning
 .
 #### Taichi
 
-Worked on implementation of the payment service.
+Worked on implementation of the payment service, database sharding.
 
 #### Dyon
 
-Worked on implementation of the payment service.
+Worked on implementation of the payment service, database sharding.
 
 ### Issues
 
