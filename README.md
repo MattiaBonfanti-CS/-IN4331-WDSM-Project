@@ -49,11 +49,11 @@ Transactions are serialized using Redis pipelines and locks have also been used 
 
 The Saga protocol has been implemented using the [TalePy library](https://github.com/meadsteve/talepy).
 
-### 2 Phase Commit
+### Saga - Manual Implementation
 
-The same technology stack has been applied here, with the difference that the 2 phase commit protocol was used instead of Saga.
+The same technology stack has been applied here, with the difference that the Saga protocol was implemented manually.
 
-The version can be found at [this release](https://github.com/MattiaBonfanti-CS/IN4331-WDSM-Project/tree/2pc).
+The version can be found at [this release](https://github.com/MattiaBonfanti-CS/IN4331-WDSM-Project/tree/saga-basic-version).
 
 ### SagaPy
 
