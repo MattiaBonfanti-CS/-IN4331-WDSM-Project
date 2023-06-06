@@ -8,7 +8,7 @@ Our contributions for the project so far are:
 
 #### Mattia
 
-Worked on the stock microservice, database sharding, tested the system and setup additional docker-compose features. 
+Worked on the stock microservice, database sharding, kubernetes setup, tested the system and setup additional docker-compose and kubernetes features. 
 
 #### Violeta
 
