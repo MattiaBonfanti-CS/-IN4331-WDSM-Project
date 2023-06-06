@@ -8,7 +8,7 @@ Our contributions for the project so far are:
 
 #### Mattia
 
-Worked on the stock microservice, database sharding, kubernetes setup, tested the system and setup additional docker-compose and kubernetes features. 
+Worked on the stock microservice, database sharding, serialized transations and locking implementation stock service, kubernetes setup, tested the system and setup additional docker-compose and kubernetes features. 
 
 #### Violeta
 
@@ -18,15 +18,18 @@ and applied the transaction manager ```saga_py``` library for the checkout opera
 
 #### Nevena
 
-Worked on implementation of the order service and tested the correct functioning of the system
-.
+Worked on implementation of the order service and tested the correct functioning of the system.
+Implemented locks and serialized transactions in some methods in the order microservice.
+Research for libraries for distributed transactions which follow either SAGA or 2PC.
+Implement distributed transactions with `talepy` library for the checkout operation.
+
 #### Taichi
 
-Worked on implementation of the payment service, database sharding.
+Worked on implementation of the payment service, database sharding, serialized transations and locking implementation payment service.
 
 #### Dyon
 
-Worked on implementation of the payment service, database sharding.
+Worked on implementation of the payment service, database sharding, serialized transations and locking implementation payment service.
 
 ### Issues
 
