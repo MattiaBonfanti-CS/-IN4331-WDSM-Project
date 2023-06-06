@@ -18,8 +18,11 @@ and applied the transaction manager ```saga_py``` library for the checkout opera
 
 #### Nevena
 
-Worked on implementation of the order service and tested the correct functioning of the system
-.
+Worked on implementation of the order service and tested the correct functioning of the system.
+Implements locks and serialized transactions in some methods in the order microservice.
+Research for libraries for distributed transactions which follow either SAGA or 2PC.
+Implement distributed transactions with `talepy` library for the checkout operation.
+
 #### Taichi
 
 Worked on implementation of the payment service, database sharding.
