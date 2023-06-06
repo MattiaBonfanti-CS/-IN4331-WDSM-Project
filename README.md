@@ -2,10 +2,20 @@
 
 Web-scale Data Management project structure with Python's Flask, Redis and Kubernetes.
 
+## Contributors
+
+IN4331 Web-scale Data Management - Group 16:
+- Nevena Gincheva
+- Violeta Chatalbasheva
+- Taichi Uno
+- Dyon van der Ende
+- Mattia Bonfanti
+
 ## Project structure
 
 * `benchmark`
     Folder containing the scripts for running the benchmark tests: stress test with Locust and consistency test.
+    The results of the tests are also included in the `benchmark-results` subfolder.
     More information [here](benchmark/README.md)
 
 * `env`
@@ -28,6 +38,28 @@ Web-scale Data Management project structure with Python's Flask, Redis and Kuber
 
 * `test`
     Folder containing some basic correctness tests for the entire system. (Feel free to enhance them)
+
+## Versions
+
+### Main
+
+The final version of the project resides in the main branch and it is based on the Saga protocol. 
+The microservices are developed using Python Flask and the used database is Redis. 
+Transactions are serialized using Redis pipelines and locks have also been used with Redis Redlock.
+
+The Saga protocol has been implemented using the [TalePy library](https://github.com/meadsteve/talepy).
+
+### 2 Phase Commit
+
+The same technology stack has been applied here, with the difference that the 2 phase commit protocol was used instead of Saga.
+
+The version can be found at [this release](https://github.com/MattiaBonfanti-CS/IN4331-WDSM-Project/tree/2pc).
+
+### SagaPy
+
+The same technology stack has been applied here, with the difference that the Saga protocol was implemented using the [SagaPy library](https://github.com/flowpl/saga_py).
+
+The version can be found at [this release](https://github.com/MattiaBonfanti-CS/IN4331-WDSM-Project/tree/saga-py).
 
 ## Deployment types:
 
@@ -122,7 +154,13 @@ minikube stop
 ***Requirements:*** 
 - You need to have access to kubectl of a k8s cluster.
 - You need to have a k8s cluster running in the cloud.
-- Helm must be installed installed on your machine: https://helm.sh/docs/intro/install/
+- Helm must be installed on your machine: https://helm.sh/docs/intro/install/
+
+***DISCLAIMER:***
+The core of the tests have been run on MiniKube, thus this repository prioritizes that setup. 
+The cloud run has been applied on a Google Drive Kubernetes Cluster through the cloud console.
+However, the limited credits did not allow extensive tests on that.
+In case another configuration is required, the scripts can be adjusted accordingly. 
 
 First add the Nginx, the metrics-server and Redis Chart repository to Helm:
 ```shell script
@@ -172,13 +210,3 @@ After the system has been deployed with one of the above methods, the basic test
 ```shell script
 python test/test_microservices.py
 ```
-
-## Contributors
-
-IN4331 Web-scale Data Management - Group 16:
-- Nevena Gincheva
-- Violeta Chatalbasheva
-- Taichi Uno
-- Dyon van der Ende
-- Mattia Bonfanti
-
